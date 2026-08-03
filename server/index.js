@@ -80,7 +80,18 @@ function ensureClientBuild() {
     return build;
   }
 
-  console.warn(`TutorHiveHub client build not found at ${build.indexFile}. Running npm run build before startup.`);
+  buildClientAssets(`startup missing ${build.indexFile}`);
+
+  build = resolveClientBuild();
+  if (!build.found) {
+    console.error(`TutorHiveHub client build is still missing. Checked: ${clientBuildCandidates().join(", ")}`);
+  }
+
+  return build;
+}
+
+function buildClientAssets(reason) {
+  console.warn(`TutorHiveHub client build unavailable (${reason}). Running npm run build.`);
   const result = spawnSync("npm", ["run", "build"], {
     cwd: rootDir,
     shell: process.platform === "win32",
@@ -90,13 +101,6 @@ function ensureClientBuild() {
   if (result.status !== 0) {
     console.error(`TutorHiveHub client build failed with status ${result.status ?? "unknown"}.`);
   }
-
-  build = resolveClientBuild();
-  if (!build.found) {
-    console.error(`TutorHiveHub client build is still missing. Checked: ${clientBuildCandidates().join(", ")}`);
-  }
-
-  return build;
 }
 
 function isPortalHost(request) {
@@ -109,14 +113,37 @@ function isPortalHost(request) {
 function sendClientApp(_request, response, next) {
   const build = resolveClientBuild();
   if (!build.found) {
-    next(new Error(`TutorHiveHub client build missing at ${build.indexFile}`));
+    buildClientAssets(`request missing ${build.indexFile}`);
+    const rebuilt = resolveClientBuild();
+    if (!rebuilt.found) {
+      next(new Error(`TutorHiveHub client build missing at ${rebuilt.indexFile}`));
+      return;
+    }
+
+    sendIndexFile(rebuilt.indexFile, response, next, false);
     return;
   }
 
-  response.sendFile(build.indexFile, (error) => {
-    if (error) {
-      next(error);
+  sendIndexFile(build.indexFile, response, next, true);
+}
+
+function sendIndexFile(indexFile, response, next, allowRebuild) {
+  response.sendFile(indexFile, (error) => {
+    if (!error) {
+      return;
     }
+
+    const isMissingFile = error.status === 404 || error.code === "ENOENT";
+    if (allowRebuild && isMissingFile && !response.headersSent) {
+      buildClientAssets(`sendFile could not read ${indexFile}`);
+      const rebuilt = resolveClientBuild();
+      if (rebuilt.found) {
+        sendIndexFile(rebuilt.indexFile, response, next, false);
+        return;
+      }
+    }
+
+    next(error);
   });
 }
 
