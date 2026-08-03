@@ -108,6 +108,8 @@ const authPublicRoutes = new Set([
   "/portal/access-denied/",
 ]);
 
+const publicWebsiteHref = "https://tutorhivehub.com/";
+
 export function PortalApp({ currentPath }: PortalAppProps) {
   useEffect(() => {
     document.title = "TutorHiveHub Portal";
@@ -314,7 +316,7 @@ function PortalLoginPage() {
         <a href="/portal/forgot-password" className="text-navy transition hover:text-gold">
           Forgot password
         </a>
-        <a href="/" className="text-slate-500 transition hover:text-navy">
+        <a href={publicWebsiteHref} className="text-slate-500 transition hover:text-navy">
           Return to website
         </a>
       </div>
