@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "prebuild": "prisma generate",
+    "prebuild": "prisma generate && node scripts/maybeBootstrapPortal.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "server": "node server/index.js",
@@ -16,6 +16,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "portal:bootstrap": "node scripts/bootstrapPortal.mjs",
+    "portal:maybe-bootstrap": "node scripts/maybeBootstrapPortal.mjs",
     "portal:seed-roles": "node scripts/seedPortalRoles.mjs",
     "portal:create-super-admin": "node scripts/createInitialSuperAdmin.mjs",
     "test:phase10": "node --test tests/phase10.test.mjs"
