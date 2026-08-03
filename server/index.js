@@ -33,6 +33,7 @@ const port = Number(process.env.PORT ?? defaultPort);
 const parentRecipient = process.env.PARENT_FORM_TO ?? "info@tutorhivehub.com";
 const tutorRecipient = process.env.TUTOR_FORM_TO ?? "admin@tutorhivehub.com";
 const publicInfoEmail = process.env.PUBLIC_INFO_EMAIL ?? "info@tutorhivehub.com";
+const clientIndexFile = path.join(rootDir, "dist", "index.html");
 const portalPublicRoutes = new Set([
   "/portal/login",
   "/portal/login/",
@@ -45,6 +46,23 @@ const portalPublicRoutes = new Set([
   "/portal/access-denied",
   "/portal/access-denied/",
 ]);
+
+const portalPublicRoutePattern = /^\/portal\/(?:login|forgot-password|reset-password|verify-email|access-denied)\/?$/;
+
+function isPortalHost(request) {
+  const forwardedHost = String(request.headers["x-forwarded-host"] ?? "").split(",")[0].trim();
+  const rawHost = forwardedHost || String(request.headers.host ?? "");
+  const hostname = rawHost.split(":")[0].toLowerCase();
+  return hostname === "portal.tutorhivehub.com";
+}
+
+function sendClientApp(_request, response, next) {
+  response.sendFile(clientIndexFile, (error) => {
+    if (error) {
+      next(error);
+    }
+  });
+}
 
 function requireSmtpConfig() {
   const missing = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"].filter((key) => !process.env[key]);
@@ -196,6 +214,16 @@ registerFamilyDashboardRoutes(app, { sendPortalEmail });
 app.post("/api/parent-enquiry", upload.none(), handleSubmission({ formName: "parent enquiry", recipient: parentRecipient }));
 app.post("/api/tutor-application", upload.single("cvUpload"), handleSubmission({ formName: "tutor application", recipient: tutorRecipient }));
 
+app.get("/", (request, response, next) => {
+  if (isPortalHost(request)) {
+    response.redirect(302, "/portal/login");
+    return;
+  }
+  next();
+});
+
+app.get(portalPublicRoutePattern, sendClientApp);
+
 app.get(/^\/portal(?:\/.*)?$/, async (request, response, next) => {
   const pathName = request.path;
   if (portalPublicRoutes.has(pathName)) {
@@ -217,9 +245,7 @@ app.get(/^\/portal(?:\/.*)?$/, async (request, response, next) => {
 
 app.use(express.static(path.join(rootDir, "dist")));
 
-app.get(/.*/, (_request, response) => {
-  response.sendFile(path.join(rootDir, "dist", "index.html"));
-});
+app.get(/.*/, sendClientApp);
 
 app.use((error, _request, response, _next) => {
   console.error("TutorHiveHub server error", error);

@@ -321,9 +321,14 @@ type FormStatus = "idle" | "submitting" | "success" | "error";
 
 function App() {
   const currentPath = typeof window !== "undefined" ? window.location.pathname : "/";
+  const isPortalSubdomain = typeof window !== "undefined" && window.location.hostname.toLowerCase() === "portal.tutorhivehub.com";
 
   if (currentPath.startsWith("/portal")) {
     return <PortalApp currentPath={currentPath} />;
+  }
+
+  if (isPortalSubdomain && currentPath === "/") {
+    return <PortalApp currentPath="/portal/login" />;
   }
 
   if (currentPath !== "/") {
