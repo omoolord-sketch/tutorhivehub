@@ -7,6 +7,7 @@ Use this checklist before deploying the TutorHiveHub portal to production.
 - Set `NODE_ENV=production`.
 - Set `APP_URL` and `PORTAL_URL` to the production domain.
 - Set `DATABASE_URL` to the production Hostinger MySQL/MariaDB database, using `mysql://USER:PASSWORD@HOST:3306/DATABASE_NAME`.
+- Set Hostinger-friendly database pool values: `DB_CONNECTION_LIMIT=1`, `DB_ACQUIRE_TIMEOUT_MS=30000`, `DB_CONNECT_TIMEOUT_MS=10000`, and `DB_IDLE_TIMEOUT_SECONDS=30`.
 - Set a strong `AUTH_SECRET` of at least 32 characters.
 - Keep `CSRF_PROTECTION=true`.
 - Keep `FORCE_HTTPS=true` behind production TLS.
