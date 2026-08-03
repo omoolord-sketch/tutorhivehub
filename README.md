@@ -65,6 +65,11 @@ Required Phase 1 variables:
 
 ```bash
 DATABASE_URL="mysql://USER:PASSWORD@HOST:3306/tutorhivehub"
+DB_HOST="localhost"
+DB_PORT=3306
+DB_USER="u000000000_portal"
+DB_PASSWORD="replace-with-your-database-password"
+DB_NAME="u000000000_portal"
 DB_CONNECTION_LIMIT=1
 DB_ACQUIRE_TIMEOUT_MS=30000
 DB_CONNECT_TIMEOUT_MS=10000

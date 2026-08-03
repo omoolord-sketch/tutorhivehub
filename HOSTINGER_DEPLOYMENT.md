@@ -38,7 +38,7 @@ npm run build
 npm run server
 ```
 
-Set production environment variables on the hosting platform, not inside the frontend code. Required values include `DATABASE_URL` in `mysql://USER:PASSWORD@HOST:3306/DATABASE_NAME` format, `AUTH_SECRET`, SMTP settings, upload storage, backup settings, and HTTPS/security flags. For Hostinger MySQL, set `DB_CONNECTION_LIMIT=1`, `DB_ACQUIRE_TIMEOUT_MS=30000`, `DB_CONNECT_TIMEOUT_MS=10000`, and `DB_IDLE_TIMEOUT_SECONDS=30` unless Hostinger support confirms higher limits. Use `PRODUCTION_DEPLOYMENT_CHECKLIST.md` before launch.
+Set production environment variables on the hosting platform, not inside the frontend code. Required values include `DATABASE_URL` in `mysql://USER:PASSWORD@HOST:3306/DATABASE_NAME` format for Prisma migrations, or the runtime-friendly separate variables `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`. For Hostinger MySQL, set `DB_CONNECTION_LIMIT=1`, `DB_ACQUIRE_TIMEOUT_MS=30000`, `DB_CONNECT_TIMEOUT_MS=10000`, and `DB_IDLE_TIMEOUT_SECONDS=30` unless Hostinger support confirms higher limits. Use `PRODUCTION_DEPLOYMENT_CHECKLIST.md` before launch.
 
 ## Forms
 
