@@ -1,0 +1,16 @@
+Options -Indexes
+
+RewriteEngine On
+
+RewriteRule ^daily-lesson-report/?$ daily-lesson-report/index.html [L]
+RewriteRule ^monthly-timesheet/?$ monthly-timesheet/index.html [L]
+RewriteRule ^api/parent-enquiry/?$ api/parent-enquiry.php [L]
+RewriteRule ^api/tutor-application/?$ api/tutor-application.php [L]
+RewriteRule ^api/daily-lesson-report/?$ api/daily-lesson-report.php [L]
+RewriteRule ^api/monthly-timesheet/?$ api/monthly-timesheet.php [L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.html [L]

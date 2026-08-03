@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="googlebot" content="noindex, nofollow, noarchive" />
+    <meta name="theme-color" content="#061c3d" />
+    <link rel="icon" type="image/png" href="/tutorhivehub-logo.png" />
+    <link rel="apple-touch-icon" href="/tutorhivehub-logo.png" />
+    <link rel="stylesheet" href="/daily-lesson-report/styles.css" />
+    <title>TutorHiveHub Daily Lesson Report</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="TutorHiveHub home">
+          <img src="/tutorhivehub-logo.png" alt="" />
+          <span>
+            <strong>Tutor<span>Hive</span>Hub</strong>
+            <small>Your Hub for Academic Success</small>
+          </span>
+        </a>
+        <p class="internal-label">Internal Tutor Form</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-intro" aria-labelledby="page-title">
+        <p class="eyebrow">Tutor Administration</p>
+        <h1 id="page-title">Daily Lesson Report</h1>
+        <p class="intro">
+          This form must be completed by tutors after every lesson to support student continuity, progress tracking,
+          and handover where required.
+        </p>
+      </section>
+
+      <form id="lesson-report-form" action="/api/daily-lesson-report" method="post" novalidate>
+        <div class="honeypot" aria-hidden="true">
+          <label for="website">Website</label>
+          <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <section class="form-card" aria-labelledby="session-heading">
+          <div class="section-heading">
+            <span>1</span>
+            <div>
+              <h2 id="session-heading">Session Information</h2>
+              <p>Record the essential lesson and participant details.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="lessonDate">Date of lesson <b>*</b></label>
+              <input id="lessonDate" name="lessonDate" type="date" required />
+            </div>
+            <div class="field">
+              <label for="lessonStartTime">Lesson start time <b>*</b></label>
+              <input id="lessonStartTime" name="lessonStartTime" type="time" required />
+            </div>
+            <div class="field">
+              <label for="lessonEndTime">Lesson end time <b>*</b></label>
+              <input id="lessonEndTime" name="lessonEndTime" type="time" required />
+            </div>
+            <div class="field">
+              <label for="tutorName">Tutor full name <b>*</b></label>
+              <input id="tutorName" name="tutorName" type="text" autocomplete="name" required />
+            </div>
+            <div class="field">
+              <label for="tutorEmail">Tutor email <b>*</b></label>
+              <input id="tutorEmail" name="tutorEmail" type="email" autocomplete="email" required />
+            </div>
+            <div class="field">
+              <label for="studentName">Student full name <b>*</b></label>
+              <input id="studentName" name="studentName" type="text" required />
+            </div>
+            <div class="field">
+              <label for="studentAgeYear">Student age/year group <b>*</b></label>
+              <input id="studentAgeYear" name="studentAgeYear" type="text" placeholder="e.g. Age 14 / Year 10" required />
+            </div>
+            <div class="field">
+              <label for="subject">Subject <b>*</b></label>
+              <input id="subject" name="subject" type="text" required />
+            </div>
+            <div class="field field-wide">
+              <label for="lessonType">Lesson type <b>*</b></label>
+              <select id="lessonType" name="lessonType" required>
+                <option value="">Select lesson type</option>
+                <option>One-to-One Tutoring</option>
+                <option>Homework Support</option>
+                <option>GCSE Preparation</option>
+                <option>A-Level Preparation</option>
+                <option>WAEC Preparation</option>
+                <option>JAMB Preparation</option>
+                <option>SAT Preparation</option>
+                <option>IELTS Preparation</option>
+                <option>NVQ Support</option>
+                <option>University Admission Coaching</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="attendance-heading">
+          <div class="section-heading">
+            <span>2</span>
+            <div>
+              <h2 id="attendance-heading">Attendance</h2>
+              <p>Confirm attendance and punctuality.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <fieldset class="field">
+              <legend>Did the student attend? <b>*</b></legend>
+              <div class="choice-row">
+                <label><input type="radio" name="studentAttended" value="Yes" required /> Yes</label>
+                <label><input type="radio" name="studentAttended" value="No" required /> No</label>
+              </div>
+            </fieldset>
+            <div class="field">
+              <label for="arrivalStatus">Student arrival status <b>*</b></label>
+              <select id="arrivalStatus" name="arrivalStatus" required>
+                <option value="">Select status</option>
+                <option>On Time</option>
+                <option>Late</option>
+                <option>Did Not Attend</option>
+              </select>
+            </div>
+            <div class="field" id="minutes-late-field" hidden>
+              <label for="minutesLate">Minutes late <b>*</b></label>
+              <input id="minutesLate" name="minutesLate" type="number" min="1" max="180" inputmode="numeric" />
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="details-heading">
+          <div class="section-heading">
+            <span>3</span>
+            <div>
+              <h2 id="details-heading">Lesson Details</h2>
+              <p>Summarise delivery, engagement, understanding, and support needs.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field field-wide">
+              <label for="topicCovered">Topic covered <b>*</b></label>
+              <input id="topicCovered" name="topicCovered" type="text" required />
+            </div>
+            <div class="field field-wide">
+              <label for="lessonSummary">Lesson summary <b>*</b></label>
+              <textarea id="lessonSummary" name="lessonSummary" rows="5" required></textarea>
+            </div>
+            <div class="field">
+              <label for="studentParticipation">Student participation <b>*</b></label>
+              <select id="studentParticipation" name="studentParticipation" required>
+                <option value="">Select participation</option>
+                <option>Highly Engaged</option>
+                <option>Participated Well</option>
+                <option>Needed Encouragement</option>
+                <option>Disengaged</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="studentUnderstanding">Student understanding <b>*</b></label>
+              <select id="studentUnderstanding" name="studentUnderstanding" required>
+                <option value="">Select understanding</option>
+                <option>Excellent</option>
+                <option>Good</option>
+                <option>Fair</option>
+                <option>Needs Improvement</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="strengthsObserved">Strengths observed <b>*</b></label>
+              <textarea id="strengthsObserved" name="strengthsObserved" rows="4" required></textarea>
+            </div>
+            <div class="field">
+              <label for="areasForSupport">Areas needing further support <b>*</b></label>
+              <textarea id="areasForSupport" name="areasForSupport" rows="4" required></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="homework-heading">
+          <div class="section-heading">
+            <span>4</span>
+            <div>
+              <h2 id="homework-heading">Homework / Next Steps</h2>
+              <p>Capture the follow-up work and preparation required.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="homeworkGiven">Homework or task given <b>*</b></label>
+              <textarea id="homeworkGiven" name="homeworkGiven" rows="4" placeholder="Enter None if no task was set." required></textarea>
+            </div>
+            <div class="field">
+              <label for="homeworkDueDate">Homework due date</label>
+              <input id="homeworkDueDate" name="homeworkDueDate" type="date" />
+            </div>
+            <div class="field">
+              <label for="nextLessonRecommendation">Next lesson recommendation <b>*</b></label>
+              <textarea id="nextLessonRecommendation" name="nextLessonRecommendation" rows="4" required></textarea>
+            </div>
+            <div class="field">
+              <label for="resourcesNeeded">Resources needed for next lesson</label>
+              <textarea id="resourcesNeeded" name="resourcesNeeded" rows="4" placeholder="Enter None if no additional resources are needed."></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="safety-heading">
+          <div class="section-heading">
+            <span>5</span>
+            <div>
+              <h2 id="safety-heading">Technical / Safeguarding</h2>
+              <p>Report any issue that affected delivery or student welfare.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <fieldset class="field">
+              <legend>Any technical issues? <b>*</b></legend>
+              <div class="choice-row">
+                <label><input type="radio" name="technicalIssue" value="Yes" required /> Yes</label>
+                <label><input type="radio" name="technicalIssue" value="No" required /> No</label>
+              </div>
+            </fieldset>
+            <div class="field" id="technical-details-field" hidden>
+              <label for="technicalIssueDetails">Technical issue details <b>*</b></label>
+              <textarea id="technicalIssueDetails" name="technicalIssueDetails" rows="4"></textarea>
+            </div>
+            <fieldset class="field">
+              <legend>Any safeguarding or welfare concern? <b>*</b></legend>
+              <div class="choice-row">
+                <label><input type="radio" name="safeguardingConcern" value="Yes" required /> Yes</label>
+                <label><input type="radio" name="safeguardingConcern" value="No" required /> No</label>
+              </div>
+            </fieldset>
+            <div class="field" id="safeguarding-details-field" hidden>
+              <label for="safeguardingConcernDetails">Safeguarding concern details <b>*</b></label>
+              <textarea id="safeguardingConcernDetails" name="safeguardingConcernDetails" rows="5"></textarea>
+            </div>
+            <div id="safeguarding-warning" class="urgent-note field-wide" role="alert" hidden>
+              <strong>Immediate action required</strong>
+              <p>Please report safeguarding concerns immediately to TutorHiveHub management in addition to submitting this form.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="parent-heading">
+          <div class="section-heading">
+            <span>6</span>
+            <div>
+              <h2 id="parent-heading">Parent-Friendly Update</h2>
+              <p>Keep this concise, clear, and suitable to share with a parent or guardian.</p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="parentUpdate">Short parent update <b>*</b></label>
+            <textarea
+              id="parentUpdate"
+              name="parentUpdate"
+              rows="4"
+              placeholder="In 1–2 sentences, summarise today’s lesson in parent-friendly language."
+              required
+            ></textarea>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="declaration-heading">
+          <div class="section-heading">
+            <span>7</span>
+            <div>
+              <h2 id="declaration-heading">Tutor Declaration</h2>
+              <p>Confirm the accuracy of this report before submitting.</p>
+            </div>
+          </div>
+          <label class="declaration">
+            <input id="tutorDeclaration" name="tutorDeclaration" type="checkbox" value="Confirmed" required />
+            <span>I confirm that this report accurately reflects the lesson delivered. <b>*</b></span>
+          </label>
+        </section>
+
+        <div id="form-status" class="form-status" role="status" aria-live="polite" hidden></div>
+
+        <div class="submit-bar">
+          <p><b>*</b> Required field</p>
+          <button id="submit-button" type="submit">Submit Lesson Report</button>
+        </div>
+      </form>
+    </main>
+
+    <footer>
+      <p>TutorHiveHub Internal Lesson Reporting</p>
+      <p>Reports are shared with TutorHiveHub administration.</p>
+    </footer>
+
+    <script src="/daily-lesson-report/app.js" defer></script>
+  </body>
+</html>

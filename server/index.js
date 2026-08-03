@@ -54,6 +54,7 @@ const portalPublicRoutePattern = /^\/portal\/(?:login|forgot-password|reset-pass
 function clientBuildCandidates() {
   return [
     process.env.CLIENT_DIST_DIR,
+    path.join(rootDir, "server", "client"),
     path.join(rootDir, "dist"),
     path.join(process.cwd(), "dist"),
     path.join(__dirname, "..", "dist"),
@@ -324,6 +325,10 @@ app.get(/^\/portal(?:\/.*)?$/, async (request, response, next) => {
   } catch (error) {
     response.redirect("/portal/login");
   }
+});
+
+app.use("/api", (_request, response) => {
+  response.status(404).json({ ok: false, message: "Not found." });
 });
 
 app.use(express.static(clientBuild.distDir));

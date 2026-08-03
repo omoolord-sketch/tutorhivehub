@@ -28,6 +28,9 @@ const internalFormRoutes = {
 
 export default defineConfig({
   plugins: [internalFormRoutes, react()],
+  build: {
+    outDir: "server/client",
+  },
   server: {
     proxy: {
       "/api": "http://127.0.0.1:4174",
