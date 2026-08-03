@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="googlebot" content="noindex, nofollow, noarchive" />
+    <meta name="theme-color" content="#061c3d" />
+    <link rel="icon" type="image/png" href="/tutorhivehub-logo.png" />
+    <link rel="apple-touch-icon" href="/tutorhivehub-logo.png" />
+    <link rel="stylesheet" href="/monthly-timesheet/styles.css" />
+    <title>TutorHiveHub Monthly Tutor Timesheet</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="TutorHiveHub home">
+          <img src="/tutorhivehub-logo.png" alt="" />
+          <span>
+            <strong>Tutor<span>Hive</span>Hub</strong>
+            <small>Your Hub for Academic Success</small>
+          </span>
+        </a>
+        <p class="internal-label">Internal Tutor Form</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-intro" aria-labelledby="page-title">
+        <p class="eyebrow">Tutor Administration</p>
+        <h1 id="page-title">Monthly Tutor Timesheet</h1>
+        <p class="intro">
+          Submit a breakdown of all completed lessons for the month so TutorHiveHub can verify the total payment due.
+        </p>
+        <div class="continuity-note">
+          <strong>Monthly timesheets support payment verification.</strong>
+          <span>Daily Lesson Reports remain separate and must still be completed after every lesson.</span>
+        </div>
+      </section>
+
+      <form id="timesheet-form" action="/api/monthly-timesheet" method="post" novalidate>
+        <div class="honeypot" aria-hidden="true">
+          <label for="website">Website</label>
+          <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+        <input id="lessonsJson" name="lessonsJson" type="hidden" />
+
+        <section class="form-card" aria-labelledby="tutor-heading">
+          <div class="section-heading">
+            <span>1</span>
+            <div>
+              <h2 id="tutor-heading">Tutor Information</h2>
+              <p>Confirm who delivered the lessons and the period covered.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="tutorName">Tutor full name <b>*</b></label>
+              <input id="tutorName" name="tutorName" type="text" autocomplete="name" required />
+            </div>
+            <div class="field">
+              <label for="tutorEmail">Tutor email <b>*</b></label>
+              <input id="tutorEmail" name="tutorEmail" type="email" autocomplete="email" required />
+            </div>
+            <div class="field">
+              <label for="tutorPhone">Tutor phone number <b>*</b></label>
+              <input id="tutorPhone" name="tutorPhone" type="tel" autocomplete="tel" required />
+            </div>
+            <div class="field">
+              <label for="mainSubjects">Main subject area(s) <b>*</b></label>
+              <input id="mainSubjects" name="mainSubjects" type="text" placeholder="e.g. Mathematics, Further Mathematics" required />
+            </div>
+            <div class="field">
+              <label for="monthCovered">Month covered <b>*</b></label>
+              <select id="monthCovered" name="monthCovered" required>
+                <option value="">Select month</option>
+                <option>January</option>
+                <option>February</option>
+                <option>March</option>
+                <option>April</option>
+                <option>May</option>
+                <option>June</option>
+                <option>July</option>
+                <option>August</option>
+                <option>September</option>
+                <option>October</option>
+                <option>November</option>
+                <option>December</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="yearCovered">Year <b>*</b></label>
+              <input id="yearCovered" name="yearCovered" type="number" min="2020" max="2100" inputmode="numeric" required />
+            </div>
+            <div class="field">
+              <label for="paymentCurrency">Payment currency <b>*</b></label>
+              <select id="paymentCurrency" name="paymentCurrency" required>
+                <option value="">Select currency</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="NGN">NGN - Nigerian Naira</option>
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="paymentDetails">Payment method/account details <b>*</b></label>
+              <textarea
+                id="paymentDetails"
+                name="paymentDetails"
+                rows="4"
+                placeholder="Provide the payment method and the account details required by TutorHiveHub."
+                required
+              ></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card lessons-card" aria-labelledby="lessons-heading">
+          <div class="section-heading lessons-heading-row">
+            <div class="heading-copy">
+              <span>2</span>
+              <div>
+                <h2 id="lessons-heading">Completed Lesson Entries</h2>
+                <p>Add one row for every completed lesson delivered during the month.</p>
+              </div>
+            </div>
+            <button id="add-lesson-button" class="secondary-button" type="button">Add Another Lesson</button>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Lesson time</th>
+                  <th scope="col">Student</th>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Lesson type</th>
+                  <th scope="col">Hours taught</th>
+                  <th scope="col">Rate</th>
+                  <th scope="col">Amount due</th>
+                  <th scope="col">Report submitted?</th>
+                  <th scope="col">Notes</th>
+                  <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="lesson-rows"></tbody>
+            </table>
+          </div>
+
+          <button id="add-lesson-mobile-button" class="secondary-button mobile-add-button" type="button">Add Another Lesson</button>
+
+          <dl class="table-totals" aria-live="polite">
+            <div>
+              <dt>Total number of lessons</dt>
+              <dd id="table-total-lessons">0</dd>
+            </div>
+            <div>
+              <dt>Total hours taught</dt>
+              <dd id="table-total-hours">0.00</dd>
+            </div>
+            <div>
+              <dt>Total amount due</dt>
+              <dd><span id="table-currency">Currency</span> <span id="table-total-amount">0.00</span></dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="form-card" aria-labelledby="summary-heading">
+          <div class="section-heading">
+            <span>3</span>
+            <div>
+              <h2 id="summary-heading">Monthly Summary</h2>
+              <p>These figures update automatically from the completed lesson entries.</p>
+            </div>
+          </div>
+          <div class="summary-grid">
+            <div>
+              <span>Total lessons delivered</span>
+              <strong id="summary-lessons">0</strong>
+            </div>
+            <div>
+              <span>Total students taught</span>
+              <strong id="summary-students">0</strong>
+            </div>
+            <div>
+              <span>Total subjects taught</span>
+              <strong id="summary-subjects">0</strong>
+            </div>
+            <div>
+              <span>Total hours completed</span>
+              <strong id="summary-hours">0.00</strong>
+            </div>
+            <div>
+              <span>Total amount claimed</span>
+              <strong><span id="summary-currency">Currency</span> <span id="summary-amount">0.00</span></strong>
+            </div>
+          </div>
+          <div class="field summary-notes">
+            <label for="additionalNotes">Additional notes for admin</label>
+            <textarea id="additionalNotes" name="additionalNotes" rows="4"></textarea>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="declaration-heading">
+          <div class="section-heading">
+            <span>4</span>
+            <div>
+              <h2 id="declaration-heading">Tutor Declaration</h2>
+              <p>Confirm the accuracy of the monthly payment claim.</p>
+            </div>
+          </div>
+          <label class="declaration">
+            <input id="tutorDeclaration" name="tutorDeclaration" type="checkbox" value="Confirmed" required />
+            <span>
+              I confirm that this monthly timesheet is accurate and only includes completed lessons delivered during
+              the month stated above. <b>*</b>
+            </span>
+          </label>
+        </section>
+
+        <div id="form-status" class="form-status" role="status" aria-live="polite" hidden></div>
+
+        <div class="submit-bar">
+          <p><b>*</b> Required field</p>
+          <button id="submit-button" type="submit">Submit Monthly Timesheet</button>
+        </div>
+      </form>
+    </main>
+
+    <footer>
+      <p>TutorHiveHub Internal Tutor Timesheets</p>
+      <p>Timesheets are shared with TutorHiveHub administration for payment verification.</p>
+    </footer>
+
+    <template id="lesson-row-template">
+      <tr class="lesson-row">
+        <td data-label="Date">
+          <label class="sr-only">Lesson date</label>
+          <input data-field="date" type="date" required />
+        </td>
+        <td data-label="Lesson time">
+          <label class="sr-only">Lesson time</label>
+          <input data-field="time" type="time" required />
+        </td>
+        <td data-label="Student">
+          <label class="sr-only">Name of student</label>
+          <input data-field="student" type="text" required />
+        </td>
+        <td data-label="Subject">
+          <label class="sr-only">Subject</label>
+          <input data-field="subject" type="text" required />
+        </td>
+        <td data-label="Lesson type">
+          <label class="sr-only">Lesson type</label>
+          <select data-field="lessonType" required>
+            <option value="">Select type</option>
+            <option>One-to-One Tutoring</option>
+            <option>Homework Support</option>
+            <option>GCSE Preparation</option>
+            <option>A-Level Preparation</option>
+            <option>WAEC Preparation</option>
+            <option>JAMB Preparation</option>
+            <option>SAT Preparation</option>
+            <option>IELTS Preparation</option>
+            <option>NVQ Support</option>
+            <option>Online Shadow Support</option>
+            <option>Other</option>
+          </select>
+        </td>
+        <td data-label="Hours taught">
+          <label class="sr-only">Hours taught</label>
+          <input data-field="hours" type="number" min="0.25" max="24" step="0.25" inputmode="decimal" required />
+        </td>
+        <td data-label="Hourly/session rate">
+          <label class="sr-only">Hourly or session rate</label>
+          <input data-field="rate" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" required />
+        </td>
+        <td data-label="Amount due">
+          <label class="sr-only">Amount due</label>
+          <output data-field="amount">0.00</output>
+        </td>
+        <td data-label="Lesson report submitted?">
+          <label class="sr-only">Lesson report submitted?</label>
+          <select data-field="reportSubmitted" required>
+            <option value="">Select</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+          <p class="row-warning" role="alert" hidden>
+            Payment may be delayed until the lesson report is submitted.
+          </p>
+        </td>
+        <td data-label="Notes">
+          <label class="sr-only">Notes</label>
+          <textarea data-field="notes" rows="2"></textarea>
+        </td>
+        <td class="row-actions" data-label="Actions">
+          <button class="remove-row-button" type="button" aria-label="Remove lesson">Remove</button>
+        </td>
+      </tr>
+    </template>
+
+    <script src="/monthly-timesheet/app.js" defer></script>
+  </body>
+</html>

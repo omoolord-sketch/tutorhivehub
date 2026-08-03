@@ -1,0 +1,25 @@
+export const portalFeatureFlags = {
+  dashboard: true,
+  reports: true,
+  users: true,
+  students: true,
+  parents: true,
+  tutors: true,
+  subjects: true,
+  assignments: true,
+  lessons: true,
+  timetable: true,
+  lessonReports: true,
+  timesheets: true,
+  finance: true,
+  homework: true,
+  resources: true,
+  progress: true,
+  notifications: true,
+  quality: true,
+  security: true,
+  support: false,
+  settings: false,
+} as const;
+
+export type PortalFeatureKey = keyof typeof portalFeatureFlags;

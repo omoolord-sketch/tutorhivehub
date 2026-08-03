@@ -1,0 +1,1228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum LessonStatus {
+  SCHEDULED
+  TUTOR_READY
+  IN_PROGRESS
+  COMPLETED
+  STUDENT_ABSENT
+  TUTOR_ABSENT
+  CANCELLED
+  RESCHEDULED
+  MISSED
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  RETURNED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PART_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CORRECTED
+  CANCELLED
+}
+
+enum HomeworkStatus {
+  DRAFT
+  ASSIGNED
+  SUBMITTED
+  LATE
+  REVIEWED
+  RESUBMISSION_REQUIRED
+  COMPLETED
+  CANCELLED
+}
+
+enum ResourceVisibility {
+  INTERNAL
+  TUTORS
+  PARENTS
+  STUDENTS
+}
+
+enum ResourceType {
+  DOCUMENT
+  PDF
+  PRESENTATION
+  WORKSHEET
+  IMAGE
+  APPROVED_LINK
+  VIDEO
+  OTHER
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum SafeguardingStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  ESCALATED
+}
+
+model User {
+  id                         String                 @id @default(cuid())
+  email                      String                 @unique
+  name                       String
+  phone                      String?
+  passwordHash               String?
+  status                     UserStatus             @default(INVITED)
+  roleId                     String?
+  role                       Role?                  @relation(fields: [roleId], references: [id])
+  parentProfile              Parent?
+  studentProfile             Student?
+  tutorProfile               Tutor?
+  sessions                   Session[]
+  passwordResetTokens        PasswordResetToken[]
+  emailVerificationTokens    EmailVerificationToken[]
+  resourcesCreated           Resource[]             @relation("ResourceCreatedBy")
+  lessonsCreated             Lesson[]               @relation("LessonCreatedBy")
+  notifications              Notification[]         @relation("NotificationRecipient")
+  notificationsCreated       Notification[]         @relation("NotificationCreatedBy")
+  resourcesApproved          Resource[]             @relation("ResourceApprovedBy")
+  progressRecordsCreated     ProgressRecord[]       @relation("ProgressCreatedBy")
+  homeworkSubmissions        HomeworkSubmission[]   @relation("HomeworkSubmittedBy")
+  homeworkReviews            HomeworkSubmission[]   @relation("HomeworkReviewedBy")
+  lessonObservationsReviewed LessonObservation[]    @relation("LessonObservationReviewer")
+  tutorReviewsCreated        TutorReview[]          @relation("TutorReviewReviewer")
+  trainingRecordsCreated     TrainingRecord[]       @relation("TrainingRecordRecordedBy")
+  policyAcknowledgements     PolicyAcknowledgement[] @relation("PolicyAcknowledgementUser")
+  policyAcknowledgementsRecorded PolicyAcknowledgement[] @relation("PolicyAcknowledgementRecordedBy")
+  improvementPlansCreated    ImprovementPlan[]      @relation("ImprovementPlanReviewer")
+  consentsForUser            ConsentRecord[]        @relation("ConsentUser")
+  consentsRecorded           ConsentRecord[]        @relation("ConsentRecordedBy")
+  retentionConfigsUpdated    DataRetentionConfig[]  @relation("RetentionConfigUpdatedBy")
+  dataProtectionRequests     DataProtectionRequest[] @relation("DataRequestRequester")
+  dataProtectionRequestsHandled DataProtectionRequest[] @relation("DataRequestHandledBy")
+  approvedTutorAvailability  TutorAvailability[]    @relation("TutorAvailabilityApprovedBy")
+  approvedAvailabilityExceptions TutorAvailabilityException[] @relation("TutorAvailabilityExceptionApprovedBy")
+  safeguardingReports        SafeguardingConcern[]  @relation("SafeguardingReporter")
+  safeguardingResolutions    SafeguardingConcern[]  @relation("SafeguardingResolvedBy")
+  approvedTutorRates         TutorRate[]            @relation("TutorRateApprovedBy")
+  reviewedTimesheets         Timesheet[]            @relation("TimesheetReviewedBy")
+  approvedTimesheets         Timesheet[]            @relation("TimesheetApprovedBy")
+  paidTimesheets             Timesheet[]            @relation("TimesheetPaidBy")
+  approvedTimesheetAdjustments TimesheetAdjustment[] @relation("TimesheetAdjustmentApprovedBy")
+  authorisedReceipts         Receipt[]              @relation("ReceiptAuthorisedBy")
+  supportRequests            SupportRequest[]       @relation("SupportRequester")
+  assignedSupportRequests    SupportRequest[]       @relation("SupportAssignedTo")
+  auditLogs                  AuditLog[]             @relation("AuditActor")
+  emailVerifiedAt            DateTime?
+  activatedAt                DateTime?
+  deactivatedAt              DateTime?
+  lastLoginAt                DateTime?
+  failedLoginCount           Int                    @default(0)
+  lockedUntil                DateTime?
+  passwordChangedAt          DateTime?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  @@index([roleId])
+  @@index([status])
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?      @db.Text
+  users       User[]
+  permissions Permission[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String? @db.Text
+  roles       Role[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Session {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  sessionTokenHash  String    @unique
+  rememberMe        Boolean   @default(false)
+  ipAddress         String?
+  userAgent         String?
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Parent {
+  id                           String    @id @default(cuid())
+  userId                       String?   @unique
+  user                         User?     @relation(fields: [userId], references: [id])
+  fullName                     String
+  email                        String
+  phone                        String?
+  preferredContactMethod       String?
+  country                      String?
+  timeZone                     String?
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+  status                       String    @default("ACTIVE")
+  notes                        String?   @db.Text
+  students                     Student[]
+  lessons                      Lesson[]
+  invoices                     Invoice[]
+  receipts                     Receipt[]
+  supportRequests              SupportRequest[]
+  consentRecords               ConsentRecord[]
+  dataProtectionRequests        DataProtectionRequest[]
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([country])
+  @@index([timeZone])
+}
+
+model Student {
+  id                    String                 @id @default(cuid())
+  userId                String?                @unique
+  user                  User?                  @relation(fields: [userId], references: [id])
+  parentId              String?
+  parent                Parent?                @relation(fields: [parentId], references: [id])
+  fullName              String
+  dateOfBirth           DateTime?
+  age                   Int?
+  yearGroup             String?
+  country               String?
+  timeZone              String?
+  schoolOrInstitution   String?
+  examPathway           String?
+  academicGoals         String?                @db.Text
+  learningNeeds         String?                @db.Text
+  status                String                 @default("ACTIVE")
+  directLoginDisabled   Boolean                @default(false)
+  startDate             DateTime?
+  importantNotes        String?                @db.Text
+  subjects              Subject[]
+  tutorAssignments      StudentTutorAssignment[]
+  lessons               Lesson[]                 @relation("PrimaryLessonStudent")
+  groupLessons          Lesson[]                 @relation("LessonParticipants")
+  lessonReports         LessonReport[]
+  homework              Homework[]
+  homeworkSubmissions   HomeworkSubmission[]
+  progressRecords       ProgressRecord[]
+  resources             Resource[]
+  invoices              Invoice[]
+  receipts              Receipt[]
+  consentRecords        ConsentRecord[]
+  dataProtectionRequests DataProtectionRequest[]
+  safeguardingConcerns  SafeguardingConcern[]
+  supportRequests       SupportRequest[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([userId])
+  @@index([parentId])
+  @@index([status])
+  @@index([yearGroup])
+  @@index([examPathway])
+  @@index([country])
+  @@index([timeZone])
+}
+
+model SupportRequest {
+  id            String    @id @default(cuid())
+  requesterId   String
+  requester     User      @relation("SupportRequester", fields: [requesterId], references: [id])
+  parentId      String?
+  parent        Parent?   @relation(fields: [parentId], references: [id])
+  studentId     String?
+  student       Student?  @relation(fields: [studentId], references: [id])
+  category      String
+  subject       String
+  message       String    @db.Text
+  status        String    @default("OPEN")
+  priority      String    @default("NORMAL")
+  assignedToId  String?
+  assignedTo    User?     @relation("SupportAssignedTo", fields: [assignedToId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([requesterId])
+  @@index([parentId])
+  @@index([studentId])
+  @@index([status])
+  @@index([category])
+  @@index([assignedToId])
+}
+
+model Tutor {
+  id                    String                 @id @default(cuid())
+  userId                String?                @unique
+  user                  User?                  @relation(fields: [userId], references: [id])
+  fullName              String
+  email                 String
+  phone                 String?
+  country               String?
+  timeZone              String?
+  qualifications        String?                @db.Text
+  mainSubjectAreas      String?                @db.Text
+  teachingExperience    String?                @db.Text
+  availability          String?                @db.Text
+  cvFileKey             String?
+  cvFileName            String?
+  certificateFiles      Json?
+  status                String                 @default("ACTIVE")
+  startDate             DateTime?
+  rateInformation       String?                @db.Text
+  internalPerformanceNotes String?             @db.Text
+  primaryTeachingDevice String?
+  operatingSystem       String?
+  internetConnectionType String?
+  averageInternetSpeed  String?
+  backupInternet        Boolean?
+  webcamAvailable       Boolean?
+  headsetMicrophoneAvailable Boolean?
+  quietTeachingEnvironment Boolean?
+  onlineTeachingPlatforms String?              @db.Text
+  subjects              Subject[]
+  studentAssignments    StudentTutorAssignment[]
+  availabilityRules     TutorAvailability[]
+  availabilityExceptions TutorAvailabilityException[]
+  lessons               Lesson[]
+  replacementLessons    Lesson[]                 @relation("ReplacementTutor")
+  lessonReports         LessonReport[]
+  lessonObservations    LessonObservation[]
+  tutorReviews          TutorReview[]
+  trainingRecords       TrainingRecord[]
+  improvementPlans      ImprovementPlan[]
+  rates                 TutorRate[]
+  timesheets            Timesheet[]
+  homeworkSet           Homework[]
+  progressRecords       ProgressRecord[]
+  resources             Resource[]
+  safeguardingConcerns  SafeguardingConcern[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([country])
+  @@index([timeZone])
+}
+
+model TutorRate {
+  id              String    @id @default(cuid())
+  tutorId         String
+  tutor           Tutor     @relation(fields: [tutorId], references: [id])
+  rateType        String
+  amount          Decimal   @db.Decimal(10, 2)
+  currency        String    @default("GBP")
+  effectiveDate   DateTime
+  endDate         DateTime?
+  approvedById    String?
+  approvedBy      User?     @relation("TutorRateApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tutorId])
+  @@index([rateType])
+  @@index([effectiveDate])
+  @@index([endDate])
+  @@index([approvedById])
+}
+
+model Subject {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  category    String?
+  examPathway String?
+  isActive    Boolean     @default(true)
+  description String?     @db.Text
+  students    Student[]
+  tutors      Tutor[]
+  assignments StudentTutorAssignment[]
+  lessons     Lesson[]
+  homework    Homework[]
+  resources   Resource[]
+  feePlans    FeePlan[]
+  progressRecords ProgressRecord[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([category])
+  @@index([examPathway])
+  @@index([isActive])
+}
+
+model StudentTutorAssignment {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id])
+  tutorId     String
+  tutor       Tutor     @relation(fields: [tutorId], references: [id])
+  subjectId   String
+  subject     Subject   @relation(fields: [subjectId], references: [id])
+  startDate   DateTime
+  endDate     DateTime?
+  status      String    @default("ACTIVE")
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([subjectId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model TutorAvailability {
+  id             String    @id @default(cuid())
+  tutorId        String
+  tutor          Tutor     @relation(fields: [tutorId], references: [id])
+  dayOfWeek      Int
+  startTime      String
+  endTime        String
+  timeZone       String
+  recurring      Boolean   @default(true)
+  status         String    @default("PENDING")
+  approvedById   String?
+  approvedBy     User?     @relation("TutorAvailabilityApprovedBy", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+  overrideReason String?   @db.Text
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tutorId])
+  @@index([dayOfWeek])
+  @@index([status])
+}
+
+model TutorAvailabilityException {
+  id             String    @id @default(cuid())
+  tutorId        String
+  tutor          Tutor     @relation(fields: [tutorId], references: [id])
+  exceptionDate  DateTime
+  exceptionType  String
+  startTime      String?
+  endTime        String?
+  timeZone       String
+  status         String    @default("PENDING")
+  approvedById   String?
+  approvedBy     User?     @relation("TutorAvailabilityExceptionApprovedBy", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+  overrideReason String?   @db.Text
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tutorId])
+  @@index([exceptionDate])
+  @@index([exceptionType])
+  @@index([status])
+}
+
+model Lesson {
+  id                String            @id @default(cuid())
+  studentId         String
+  student           Student           @relation("PrimaryLessonStudent", fields: [studentId], references: [id])
+  students          Student[]         @relation("LessonParticipants")
+  tutorId           String
+  tutor             Tutor             @relation(fields: [tutorId], references: [id])
+  replacementTutorId String?
+  replacementTutor  Tutor?            @relation("ReplacementTutor", fields: [replacementTutorId], references: [id])
+  subjectId         String
+  subject           Subject           @relation(fields: [subjectId], references: [id])
+  parentId          String?
+  parent            Parent?           @relation(fields: [parentId], references: [id])
+  lessonType        String
+  scheduledStart    DateTime
+  scheduledEnd      DateTime
+  timeZone          String?
+  durationMinutes   Int?
+  meetingLink       String?           @db.VarChar(2048)
+  lessonObjective   String?           @db.Text
+  tutorReadyAt      DateTime?
+  readinessChecklist Json?
+  preparationApprovedAsLessonTime Boolean @default(false)
+  tutorAttendance   String?
+  studentAttendance String?
+  arrivalTime       DateTime?
+  minutesLate       Int?
+  absenceReason     String?           @db.Text
+  attendanceNotes   String?           @db.Text
+  reportStatus      String            @default("NOT_DUE")
+  actualStart       DateTime?
+  actualEnd         DateTime?
+  status            LessonStatus      @default(SCHEDULED)
+  recurrencePattern String?
+  recurrenceGroupId String?
+  rescheduledFromId String?
+  rescheduledFrom   Lesson?           @relation("LessonReschedules", fields: [rescheduledFromId], references: [id])
+  rescheduledLessons Lesson[]          @relation("LessonReschedules")
+  cancellationReason String?           @db.Text
+  cancellationInitiatedBy String?
+  createdById       String?
+  createdBy         User?             @relation("LessonCreatedBy", fields: [createdById], references: [id])
+  notes             String?           @db.Text
+  report            LessonReport?
+  lessonObservations LessonObservation[]
+  safeguardingConcerns SafeguardingConcern[]
+  timesheetEntries  TimesheetEntry[]
+  homework          Homework[]
+  resources         Resource[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([subjectId])
+  @@index([parentId])
+  @@index([replacementTutorId])
+  @@index([scheduledStart])
+  @@index([scheduledEnd])
+  @@index([status])
+  @@index([reportStatus])
+  @@index([recurrenceGroupId])
+  @@index([createdById])
+}
+
+model LessonReport {
+  id                         String       @id @default(cuid())
+  lessonId                   String       @unique
+  lesson                     Lesson       @relation(fields: [lessonId], references: [id])
+  tutorId                    String
+  tutor                      Tutor        @relation(fields: [tutorId], references: [id])
+  studentId                  String
+  student                    Student      @relation(fields: [studentId], references: [id])
+  topicCovered               String       @db.Text
+  lessonSummary              String       @db.Text
+  studentParticipation       String
+  studentUnderstanding       String
+  strengthsObserved          String?      @db.Text
+  areasNeedingSupport        String?      @db.Text
+  homeworkOrTaskGiven        String?      @db.Text
+  homeworkDueDate            DateTime?
+  nextLessonRecommendation   String?      @db.Text
+  resourcesRequired          String?      @db.Text
+  parentFriendlyUpdate       String       @db.Text
+  technicalIssuesReported    Boolean      @default(false)
+  technicalIssueDetails      String?      @db.Text
+  safeguardingConcernRaised  Boolean      @default(false)
+  internalTutorNotes         String?      @db.Text
+  parentVisible              Boolean      @default(true)
+  tutorDeclaration           Boolean      @default(false)
+  safeguardingConcerns       SafeguardingConcern[]
+  submittedAt                DateTime     @default(now())
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+
+  @@index([tutorId])
+  @@index([studentId])
+}
+
+model Timesheet {
+  id                  String                @id @default(cuid())
+  tutorId             String
+  tutor               Tutor                 @relation(fields: [tutorId], references: [id])
+  monthCovered        Int
+  yearCovered         Int
+  status              TimesheetStatus       @default(DRAFT)
+  totalLessons        Int                   @default(0)
+  totalStudents       Int                   @default(0)
+  totalSubjects       Int                   @default(0)
+  totalHours          Decimal               @default(0) @db.Decimal(10, 2)
+  totalAmountDue      Decimal               @default(0) @db.Decimal(10, 2)
+  standardTutoringTotal Decimal             @default(0) @db.Decimal(10, 2)
+  shadowSessionTotal  Decimal               @default(0) @db.Decimal(10, 2)
+  nvqSupportTotal     Decimal               @default(0) @db.Decimal(10, 2)
+  adjustmentsTotal    Decimal               @default(0) @db.Decimal(10, 2)
+  finalAmountPayable  Decimal               @default(0) @db.Decimal(10, 2)
+  notes               String?          @db.Text
+  tutorNotes          String?          @db.Text
+  reviewedById        String?
+  reviewedBy          User?                 @relation("TimesheetReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt          DateTime?
+  approvedById        String?
+  approvedBy          User?                 @relation("TimesheetApprovedBy", fields: [approvedById], references: [id])
+  approvedAt          DateTime?
+  paidById            String?
+  paidBy              User?                 @relation("TimesheetPaidBy", fields: [paidById], references: [id])
+  paidAt              DateTime?
+  paymentDate         DateTime?
+  transactionReference String?
+  returnReason        String?          @db.Text
+  rejectionReason     String?          @db.Text
+  entries             TimesheetEntry[]
+  adjustments         TimesheetAdjustment[]
+  submittedAt         DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([tutorId])
+  @@index([status])
+  @@index([reviewedById])
+  @@index([approvedById])
+  @@index([paidById])
+  @@unique([tutorId, monthCovered, yearCovered])
+}
+
+model TimesheetEntry {
+  id                       String     @id @default(cuid())
+  timesheetId              String
+  timesheet                Timesheet  @relation(fields: [timesheetId], references: [id])
+  lessonId                 String?
+  lesson                   Lesson?    @relation(fields: [lessonId], references: [id])
+  date                     DateTime
+  lessonTime               String
+  studentName              String
+  subject                  String
+  lessonType               String
+  durationMinutes          Int?
+  hoursTaught              Decimal    @db.Decimal(6, 2)
+  rateType                 String?
+  rate                     Decimal    @db.Decimal(10, 2)
+  currency                 String     @default("GBP")
+  amountDue                Decimal    @db.Decimal(10, 2)
+  attendanceStatus         String?
+  reportStatus             String?
+  paymentEligibility       String     @default("REVIEW")
+  eligibilityReason        String?    @db.Text
+  lessonReportSubmitted    Boolean    @default(false)
+  source                   String     @default("GENERATED")
+  tutorFlagType            String?
+  tutorFlagNote            String?    @db.Text
+  adminReviewNote          String?    @db.Text
+  notes                    String?    @db.Text
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+
+  @@index([timesheetId])
+  @@index([lessonId])
+  @@index([paymentEligibility])
+  @@index([source])
+}
+
+model TimesheetAdjustment {
+  id            String     @id @default(cuid())
+  timesheetId   String
+  timesheet     Timesheet  @relation(fields: [timesheetId], references: [id])
+  amount        Decimal    @db.Decimal(10, 2)
+  currency      String     @default("GBP")
+  reason        String     @db.Text
+  approvedById  String
+  approvedBy    User       @relation("TimesheetAdjustmentApprovedBy", fields: [approvedById], references: [id])
+  approvedAt    DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+
+  @@index([timesheetId])
+  @@index([approvedById])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  parentId       String?
+  parent         Parent?       @relation(fields: [parentId], references: [id])
+  studentId      String?
+  student        Student?      @relation(fields: [studentId], references: [id])
+  feePlanId      String?
+  feePlan        FeePlan?      @relation(fields: [feePlanId], references: [id])
+  invoiceNumber  String        @unique
+  status         InvoiceStatus @default(DRAFT)
+  service        String        @default("Tutoring support")
+  billingPeriodStart DateTime?
+  billingPeriodEnd DateTime?
+  quantity       Decimal       @default(1) @db.Decimal(10, 2)
+  rate           Decimal       @default(0) @db.Decimal(10, 2)
+  discountAmount Decimal       @default(0) @db.Decimal(10, 2)
+  currency       String        @default("GBP")
+  subtotal       Decimal       @db.Decimal(10, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(10, 2)
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  amountPaid     Decimal       @default(0) @db.Decimal(10, 2)
+  balanceDue     Decimal       @default(0) @db.Decimal(10, 2)
+  dueDate        DateTime?
+  issuedAt       DateTime?
+  sentAt         DateTime?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  notes          String?       @db.Text
+  createdById    String?
+  payments       Payment[]
+  receipts       Receipt[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([parentId])
+  @@index([studentId])
+  @@index([feePlanId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([createdAt])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  invoiceId     String
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
+  kind          String        @default("PAYMENT")
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("GBP")
+  status        PaymentStatus @default(PENDING)
+  paymentMethod String?
+  provider      String?
+  providerPaymentId String?
+  reference     String?
+  transactionReference String?
+  receivedById  String?
+  notes         String?       @db.Text
+  metadata      Json?
+  paidAt        DateTime?
+  receipt       Receipt?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([invoiceId])
+  @@index([status])
+  @@index([kind])
+  @@index([paidAt])
+}
+
+model Receipt {
+  id                       String    @id @default(cuid())
+  receiptNumber            String    @unique
+  invoiceId                String
+  invoice                  Invoice   @relation(fields: [invoiceId], references: [id])
+  paymentId                String    @unique
+  payment                  Payment   @relation(fields: [paymentId], references: [id])
+  parentId                 String
+  parent                   Parent    @relation(fields: [parentId], references: [id])
+  studentId                String?
+  student                  Student?  @relation(fields: [studentId], references: [id])
+  amount                   Decimal   @db.Decimal(10, 2)
+  amountInWords            String?   @db.Text
+  currency                 String    @default("GBP")
+  paymentMethod            String
+  transactionReference     String?
+  dateReceived             DateTime
+  service                  String
+  periodCovered            String?
+  authorisedConfirmation   Boolean   @default(true)
+  authorisedById           String?
+  authorisedBy             User?     @relation("ReceiptAuthorisedBy", fields: [authorisedById], references: [id])
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([invoiceId])
+  @@index([parentId])
+  @@index([studentId])
+  @@index([authorisedById])
+  @@index([dateReceived])
+}
+
+model FeePlan {
+  id                      String    @id @default(cuid())
+  name                    String
+  planType                String
+  service                 String
+  description             String?   @db.Text
+  subjectId               String?
+  subject                 Subject?  @relation(fields: [subjectId], references: [id])
+  examPathway             String?
+  billingFrequency        String?
+  defaultQuantity         Decimal   @default(1) @db.Decimal(10, 2)
+  defaultRate             Decimal   @default(0) @db.Decimal(10, 2)
+  currency                String    @default("GBP")
+  discountType            String?
+  discountAmount          Decimal   @default(0) @db.Decimal(10, 2)
+  scholarshipOrConcession Boolean   @default(false)
+  status                  String    @default("ACTIVE")
+  notes                   String?   @db.Text
+  createdById             String?
+  invoices                Invoice[]
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([planType])
+  @@index([subjectId])
+  @@index([examPathway])
+  @@index([status])
+}
+
+model Homework {
+  id          String         @id @default(cuid())
+  studentId   String
+  student     Student        @relation(fields: [studentId], references: [id])
+  tutorId     String?
+  tutor       Tutor?         @relation(fields: [tutorId], references: [id])
+  lessonId    String?
+  lesson      Lesson?        @relation(fields: [lessonId], references: [id])
+  subjectId   String?
+  subject     Subject?       @relation(fields: [subjectId], references: [id])
+  title       String
+  details     String         @db.Text
+  instructions String?       @db.Text
+  gradingCriteria String?    @db.Text
+  maxMarks    Decimal?       @db.Decimal(6, 2)
+  mark        Decimal?       @db.Decimal(6, 2)
+  feedback    String?        @db.Text
+  attachments Json?
+  resources   Resource[]
+  submissions HomeworkSubmission[]
+  dueDate     DateTime?
+  status      HomeworkStatus @default(ASSIGNED)
+  publishedAt DateTime?
+  submittedAt DateTime?
+  reviewedAt DateTime?
+  completedAt DateTime?
+  resubmissionRequestedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([lessonId])
+  @@index([subjectId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model HomeworkSubmission {
+  id            String    @id @default(cuid())
+  homeworkId    String
+  homework      Homework  @relation(fields: [homeworkId], references: [id])
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id])
+  submittedById String?
+  submittedBy   User?     @relation("HomeworkSubmittedBy", fields: [submittedById], references: [id])
+  comments      String?   @db.Text
+  fileKey       String?
+  fileName      String?
+  fileMimeType  String?
+  fileSize      Int?
+  status        String    @default("SUBMITTED")
+  mark          Decimal?  @db.Decimal(6, 2)
+  feedback      String?   @db.Text
+  reviewedById  String?
+  reviewedBy    User?     @relation("HomeworkReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([homeworkId])
+  @@index([studentId])
+  @@index([submittedById])
+  @@index([reviewedById])
+  @@index([status])
+}
+
+model Resource {
+  id            String             @id @default(cuid())
+  title         String
+  description   String?             @db.Text
+  url           String?             @db.VarChar(2048)
+  fileKey       String?
+  fileName      String?
+  fileMimeType  String?
+  fileSize      Int?
+  resourceType  ResourceType       @default(DOCUMENT)
+  visibility    ResourceVisibility @default(INTERNAL)
+  subjectId     String?
+  subject       Subject?           @relation(fields: [subjectId], references: [id])
+  tutorId       String?
+  tutor         Tutor?             @relation(fields: [tutorId], references: [id])
+  studentId     String?
+  student       Student?           @relation(fields: [studentId], references: [id])
+  lessonId      String?
+  lesson        Lesson?            @relation(fields: [lessonId], references: [id])
+  yearGroup     String?
+  examPathway   String?
+  status        String             @default("ACTIVE")
+  createdById   String?
+  createdBy     User?              @relation("ResourceCreatedBy", fields: [createdById], references: [id])
+  approvedById  String?
+  approvedBy    User?              @relation("ResourceApprovedBy", fields: [approvedById], references: [id])
+  approvedAt    DateTime?
+  homework      Homework[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([subjectId])
+  @@index([tutorId])
+  @@index([studentId])
+  @@index([lessonId])
+  @@index([createdById])
+  @@index([approvedById])
+  @@index([resourceType])
+  @@index([visibility])
+  @@index([status])
+  @@index([yearGroup])
+  @@index([examPathway])
+}
+
+model ProgressRecord {
+  id                    String    @id @default(cuid())
+  studentId             String
+  student               Student   @relation(fields: [studentId], references: [id])
+  tutorId               String?
+  tutor                 Tutor?    @relation(fields: [tutorId], references: [id])
+  subjectId             String?
+  subject               Subject?  @relation(fields: [subjectId], references: [id])
+  learningGoals         String    @db.Text
+  baselineLevel         String?
+  currentLevel          String?
+  skillsAchieved        String?   @db.Text
+  areasForImprovement   String?   @db.Text
+  tutorComments         String?   @db.Text
+  parentSummary         String?   @db.Text
+  parentVisible         Boolean   @default(false)
+  reviewDate            DateTime
+  goalStatus            String    @default("IN_PROGRESS")
+  createdById           String?
+  createdBy             User?     @relation("ProgressCreatedBy", fields: [createdById], references: [id])
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([subjectId])
+  @@index([goalStatus])
+  @@index([reviewDate])
+  @@index([parentVisible])
+  @@index([createdById])
+}
+
+model Notification {
+  id             String             @id @default(cuid())
+  recipientId    String
+  recipient      User               @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  createdById    String?
+  createdBy      User?              @relation("NotificationCreatedBy", fields: [createdById], references: [id])
+  title          String
+  message        String             @db.Text
+  category       String?
+  entityType     String?
+  entityId       String?
+  emailSentAt    DateTime?
+  status         NotificationStatus @default(UNREAD)
+  createdAt      DateTime           @default(now())
+  readAt         DateTime?
+
+  @@index([recipientId])
+  @@index([createdById])
+  @@index([category])
+  @@index([entityType, entityId])
+  @@index([status])
+}
+
+model SafeguardingConcern {
+  id            String              @id @default(cuid())
+  studentId     String?
+  student       Student?            @relation(fields: [studentId], references: [id])
+  tutorId       String?
+  tutor         Tutor?              @relation(fields: [tutorId], references: [id])
+  lessonId      String?
+  lesson        Lesson?             @relation(fields: [lessonId], references: [id])
+  lessonReportId String?
+  lessonReport  LessonReport?       @relation(fields: [lessonReportId], references: [id])
+  reportedById  String?
+  reportedBy    User?               @relation("SafeguardingReporter", fields: [reportedById], references: [id])
+  resolvedById  String?
+  resolvedBy    User?               @relation("SafeguardingResolvedBy", fields: [resolvedById], references: [id])
+  status        SafeguardingStatus  @default(OPEN)
+  summary       String              @db.Text
+  restrictedNotes String?           @db.Text
+  reportedAt    DateTime            @default(now())
+  resolvedAt    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([lessonId])
+  @@index([lessonReportId])
+  @@index([reportedById])
+  @@index([resolvedById])
+}
+
+model LessonObservation {
+  id               String    @id @default(cuid())
+  lessonId         String?
+  lesson           Lesson?   @relation(fields: [lessonId], references: [id])
+  tutorId          String
+  tutor            Tutor     @relation(fields: [tutorId], references: [id])
+  reviewerId       String?
+  reviewer         User?     @relation("LessonObservationReviewer", fields: [reviewerId], references: [id])
+  observationDate  DateTime
+  focusArea        String?
+  rating           String?
+  strengths        String?   @db.Text
+  improvementAreas String?   @db.Text
+  reviewerNotes    String?   @db.Text
+  nextReviewDate   DateTime?
+  status           String    @default("OPEN")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([lessonId])
+  @@index([tutorId])
+  @@index([reviewerId])
+  @@index([observationDate])
+  @@index([status])
+}
+
+model TutorReview {
+  id                   String    @id @default(cuid())
+  tutorId              String
+  tutor                Tutor     @relation(fields: [tutorId], references: [id])
+  reviewerId           String?
+  reviewer             User?     @relation("TutorReviewReviewer", fields: [reviewerId], references: [id])
+  reviewDate           DateTime
+  rating               String?
+  lessonsAssigned      Int       @default(0)
+  lessonsCompleted     Int       @default(0)
+  attendanceRate       Decimal?  @db.Decimal(6, 2)
+  punctualityRate      Decimal?  @db.Decimal(6, 2)
+  reportSubmissionRate Decimal?  @db.Decimal(6, 2)
+  homeworkFeedbackRate Decimal?  @db.Decimal(6, 2)
+  studentRetention     Decimal?  @db.Decimal(6, 2)
+  complaints           Int       @default(0)
+  qualityReviewNotes   String?   @db.Text
+  nextReviewDate       DateTime?
+  status               String    @default("OPEN")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([tutorId])
+  @@index([reviewerId])
+  @@index([reviewDate])
+  @@index([status])
+}
+
+model TrainingRecord {
+  id             String    @id @default(cuid())
+  tutorId        String
+  tutor          Tutor     @relation(fields: [tutorId], references: [id])
+  recordedById   String?
+  recordedBy     User?     @relation("TrainingRecordRecordedBy", fields: [recordedById], references: [id])
+  title          String
+  provider       String?
+  trainingDate   DateTime?
+  completionDate DateTime?
+  expiryDate     DateTime?
+  status         String    @default("PLANNED")
+  certificateFileKey String?
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tutorId])
+  @@index([recordedById])
+  @@index([status])
+  @@index([expiryDate])
+}
+
+model PolicyAcknowledgement {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation("PolicyAcknowledgementUser", fields: [userId], references: [id])
+  recordedById   String?
+  recordedBy     User?     @relation("PolicyAcknowledgementRecordedBy", fields: [recordedById], references: [id])
+  policyName     String
+  policyVersion  String
+  acknowledgedAt DateTime  @default(now())
+  ipAddress      String?
+  userAgent      String?
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([recordedById])
+  @@index([policyName])
+  @@index([acknowledgedAt])
+}
+
+model ImprovementPlan {
+  id               String    @id @default(cuid())
+  tutorId          String
+  tutor            Tutor     @relation(fields: [tutorId], references: [id])
+  reviewerId       String?
+  reviewer         User?     @relation("ImprovementPlanReviewer", fields: [reviewerId], references: [id])
+  title            String
+  concernSummary   String    @db.Text
+  requiredActions  String    @db.Text
+  supportOffered   String?   @db.Text
+  dueDate          DateTime?
+  reviewDate       DateTime?
+  status           String    @default("OPEN")
+  reviewerNotes    String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([tutorId])
+  @@index([reviewerId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([reviewDate])
+}
+
+model ConsentRecord {
+  id             String    @id @default(cuid())
+  userId         String?
+  user           User?     @relation("ConsentUser", fields: [userId], references: [id])
+  parentId       String?
+  parent         Parent?   @relation(fields: [parentId], references: [id])
+  studentId      String?
+  student        Student?  @relation(fields: [studentId], references: [id])
+  consentType    String
+  granted        Boolean   @default(true)
+  legalBasis     String?   @db.Text
+  recordedById   String?
+  recordedBy     User?     @relation("ConsentRecordedBy", fields: [recordedById], references: [id])
+  recordedAt     DateTime  @default(now())
+  expiryDate     DateTime?
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([parentId])
+  @@index([studentId])
+  @@index([consentType])
+  @@index([granted])
+}
+
+model DataRetentionConfig {
+  id              String    @id @default(cuid())
+  recordType      String    @unique
+  retentionMonths Int
+  action          String    @default("REVIEW")
+  legalBasis      String?   @db.Text
+  active          Boolean   @default(true)
+  updatedById     String?
+  updatedBy       User?     @relation("RetentionConfigUpdatedBy", fields: [updatedById], references: [id])
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([active])
+  @@index([updatedById])
+}
+
+model DataProtectionRequest {
+  id             String    @id @default(cuid())
+  requesterId    String?
+  requester      User?     @relation("DataRequestRequester", fields: [requesterId], references: [id])
+  parentId       String?
+  parent         Parent?   @relation(fields: [parentId], references: [id])
+  studentId      String?
+  student        Student?  @relation(fields: [studentId], references: [id])
+  requestType    String
+  scope          String?   @db.Text
+  status         String    @default("OPEN")
+  requestedAt    DateTime  @default(now())
+  dueAt          DateTime?
+  handledById    String?
+  handledBy      User?     @relation("DataRequestHandledBy", fields: [handledById], references: [id])
+  completedAt    DateTime?
+  responseNotes  String?   @db.Text
+  internalNotes  String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([requesterId])
+  @@index([parentId])
+  @@index([studentId])
+  @@index([requestType])
+  @@index([status])
+  @@index([dueAt])
+  @@index([handledById])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorId     String?
+  actor       User?     @relation("AuditActor", fields: [actorId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+}
