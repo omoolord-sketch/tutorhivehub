@@ -28,7 +28,8 @@ const upload = multer({
   },
 });
 
-const port = Number(process.env.PORT ?? 4174);
+const defaultPort = process.env.NODE_ENV === "production" ? 3000 : 4174;
+const port = Number(process.env.PORT ?? defaultPort);
 const parentRecipient = process.env.PARENT_FORM_TO ?? "info@tutorhivehub.com";
 const tutorRecipient = process.env.TUTOR_FORM_TO ?? "admin@tutorhivehub.com";
 const publicInfoEmail = process.env.PUBLIC_INFO_EMAIL ?? "info@tutorhivehub.com";
