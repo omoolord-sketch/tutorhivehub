@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import multer from "multer";
 import nodemailer from "nodemailer";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -129,14 +129,12 @@ function sendClientApp(_request, response, next) {
 }
 
 function sendIndexFile(indexFile, response, next, allowRebuild) {
-  response.sendFile(indexFile, (error) => {
-    if (!error) {
-      return;
-    }
-
-    const isMissingFile = error.status === 404 || error.code === "ENOENT";
+  try {
+    response.type("html").send(readFileSync(indexFile, "utf8"));
+  } catch (error) {
+    const isMissingFile = error?.code === "ENOENT";
     if (allowRebuild && isMissingFile && !response.headersSent) {
-      buildClientAssets(`sendFile could not read ${indexFile}`);
+      buildClientAssets(`readFile could not read ${indexFile}`);
       const rebuilt = resolveClientBuild();
       if (rebuilt.found) {
         sendIndexFile(rebuilt.indexFile, response, next, false);
@@ -145,7 +143,86 @@ function sendIndexFile(indexFile, response, next, allowRebuild) {
     }
 
     next(error);
-  });
+  }
+}
+
+function serveClientStatic(request, response, next) {
+  if (!["GET", "HEAD"].includes(request.method)) {
+    next();
+    return;
+  }
+
+  const build = resolveClientBuild();
+  if (!build.found) {
+    next();
+    return;
+  }
+
+  const pathname = safeDecodePath(request.path);
+  if (!pathname || pathname === "/" || pathname.includes("\0")) {
+    next();
+    return;
+  }
+
+  if (path.basename(pathname).startsWith(".")) {
+    response.status(404).end();
+    return;
+  }
+
+  const filePath = path.resolve(build.distDir, `.${pathname}`);
+  const relativePath = path.relative(build.distDir, filePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    response.status(403).end();
+    return;
+  }
+
+  try {
+    const stat = statSync(filePath);
+    if (!stat.isFile()) {
+      next();
+      return;
+    }
+
+    response.type(contentTypeFor(filePath));
+    if (request.method === "HEAD") {
+      response.end();
+      return;
+    }
+
+    response.send(readFileSync(filePath));
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      next();
+      return;
+    }
+    next(error);
+  }
+}
+
+function safeDecodePath(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+function contentTypeFor(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  const contentTypes = {
+    ".css": "text/css",
+    ".html": "text/html",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".js": "application/javascript",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain",
+    ".webp": "image/webp",
+  };
+
+  return contentTypes[extension] || "application/octet-stream";
 }
 
 function requireSmtpConfig() {
@@ -331,7 +408,7 @@ app.use("/api", (_request, response) => {
   response.status(404).json({ ok: false, message: "Not found." });
 });
 
-app.use(express.static(clientBuild.distDir));
+app.use(serveClientStatic);
 
 app.get(/.*/, sendClientApp);
 
