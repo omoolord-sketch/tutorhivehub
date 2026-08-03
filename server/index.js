@@ -368,8 +368,11 @@ app.get("/api/portal/diagnostics/database", async (request, response, next) => {
   }
 
   try {
-    const diagnostics = await runDatabaseDiagnostics();
-    response.status(diagnostics.ok ? 200 : 500).json(diagnostics);
+    const diagnostics = await runDatabaseDiagnostics({
+      includePrisma: request.query.prisma === "true" || request.query.mode === "full",
+      timeoutMs: request.query.timeoutMs,
+    });
+    response.status(200).json(diagnostics);
   } catch (error) {
     next(error);
   }

@@ -1,31 +1,52 @@
 import mariadb from "mariadb";
 import { checkDatabaseConnection, getDatabaseConnectionConfig, getDatabaseRuntimeSummary } from "./db.js";
 
+const DEFAULT_TIMEOUT_MS = 4500;
+
 const sensitiveValues = () =>
   [process.env.DB_PASSWORD, process.env.DATABASE_URL, process.env.INITIAL_ADMIN_PASSWORD, process.env.SMTP_PASS].filter(Boolean);
 
-export async function runDatabaseDiagnostics() {
+export async function runDatabaseDiagnostics({ includePrisma = false, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const startedAt = Date.now();
   const environment = safeCall(getDatabaseRuntimeSummary);
-  const rawConnection = await checkRawMariaDbConnection();
-  const prisma = await checkPrismaConnection();
+  const boundedTimeoutMs = boundedTimeout(timeoutMs);
+  const rawConnection = await withTimeout(
+    checkRawMariaDbConnection(boundedTimeoutMs),
+    boundedTimeoutMs + 500,
+    timeoutResult("rawConnection", boundedTimeoutMs + 500),
+  );
+  const prisma = includePrisma
+    ? await withTimeout(
+        checkPrismaConnection(),
+        boundedTimeoutMs + 500,
+        timeoutResult("prisma", boundedTimeoutMs + 500),
+      )
+    : {
+        ok: null,
+        skipped: true,
+        message: "Add prisma=true to this diagnostic URL after rawConnection succeeds.",
+      };
 
   return {
-    ok: Boolean(rawConnection.ok && prisma.ok),
+    ok: Boolean(rawConnection.ok && (prisma.ok || prisma.skipped)),
     generatedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
+    timeoutMs: boundedTimeoutMs,
     environment,
     rawConnection,
     prisma,
   };
 }
 
-async function checkRawMariaDbConnection() {
+async function checkRawMariaDbConnection(timeoutMs) {
   const startedAt = Date.now();
   let connection;
 
   try {
-    const config = connectionOnlyConfig(getDatabaseConnectionConfig());
+    const config = {
+      ...connectionOnlyConfig(getDatabaseConnectionConfig()),
+      connectTimeout: timeoutMs,
+    };
     connection = await mariadb.createConnection(config);
     const rows = await connection.query("SELECT DATABASE() AS databaseName, CURRENT_USER() AS currentUser, VERSION() AS serverVersion");
     const firstRow = Array.isArray(rows) ? rows[0] : rows;
@@ -68,6 +89,31 @@ async function checkPrismaConnection() {
   }
 }
 
+async function withTimeout(promise, timeoutMs, timeoutPayload) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(timeoutPayload), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function timeoutResult(area, timeoutMs) {
+  return {
+    ok: false,
+    timedOut: true,
+    durationMs: timeoutMs,
+    name: "DiagnosticTimeout",
+    code: "DIAGNOSTIC_TIMEOUT",
+    message: `${area} did not respond within ${timeoutMs}ms.`,
+  };
+}
+
 function connectionOnlyConfig(config) {
   const {
     acquireTimeout,
@@ -89,6 +135,15 @@ function safeCall(callback) {
       error: safeError(error).message,
     };
   }
+}
+
+function boundedTimeout(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_TIMEOUT_MS;
+  }
+
+  return Math.min(Math.max(Math.trunc(parsed), 1000), 10000);
 }
 
 function safeError(error) {
