@@ -15,6 +15,11 @@ export async function runDatabaseDiagnostics({ includePrisma = false, timeoutMs 
     boundedTimeoutMs + 500,
     timeoutResult("rawConnection", boundedTimeoutMs + 500),
   );
+  const rawPool = await withTimeout(
+    checkRawMariaDbPool(boundedTimeoutMs),
+    boundedTimeoutMs + 500,
+    timeoutResult("rawPool", boundedTimeoutMs + 500),
+  );
   const prisma = includePrisma
     ? await withTimeout(
         checkPrismaConnection(),
@@ -28,12 +33,13 @@ export async function runDatabaseDiagnostics({ includePrisma = false, timeoutMs 
       };
 
   return {
-    ok: Boolean(rawConnection.ok && (prisma.ok || prisma.skipped)),
+    ok: Boolean(rawConnection.ok && rawPool.ok && (prisma.ok || prisma.skipped)),
     generatedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
     timeoutMs: boundedTimeoutMs,
     environment,
     rawConnection,
+    rawPool,
     prisma,
   };
 }
@@ -86,6 +92,38 @@ async function checkPrismaConnection() {
       durationMs: Date.now() - startedAt,
       ...safeError(error),
     };
+  }
+}
+
+async function checkRawMariaDbPool(timeoutMs) {
+  const startedAt = Date.now();
+  let pool;
+
+  try {
+    const config = {
+      ...getDatabaseConnectionConfig(),
+      acquireTimeout: timeoutMs,
+      connectTimeout: timeoutMs,
+    };
+    pool = mariadb.createPool(config);
+    const rows = await pool.query({ sql: "SELECT VERSION() AS serverVersion", rowsAsArray: false });
+    const firstRow = Array.isArray(rows) ? rows[0] : rows;
+
+    return {
+      ok: true,
+      durationMs: Date.now() - startedAt,
+      serverVersion: firstRow?.serverVersion || "",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      durationMs: Date.now() - startedAt,
+      ...safeError(error),
+    };
+  } finally {
+    if (pool) {
+      await pool.end().catch(() => {});
+    }
   }
 }
 

@@ -9,7 +9,11 @@ export function getPrisma() {
   }
 
   if (!prisma) {
-    const adapter = new PrismaMariaDb(mysqlConnectionConfig());
+    const config = mysqlConnectionConfig();
+    const adapter = new PrismaMariaDb(config, {
+      database: config.database,
+      useTextProtocol: true,
+    });
     prisma = new PrismaClient({ adapter });
   }
 
@@ -99,9 +103,7 @@ function withPoolOptions(config) {
   return {
     ...config,
     connectionLimit,
-    minimumIdle: 0,
     acquireTimeout,
-    initializationTimeout: Math.max(100, acquireTimeout - 100),
     connectTimeout: positiveInteger(process.env.DB_CONNECT_TIMEOUT_MS, 10000),
     idleTimeout: positiveInteger(process.env.DB_IDLE_TIMEOUT_SECONDS, 30),
   };
