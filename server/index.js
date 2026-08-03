@@ -2,7 +2,9 @@ import "dotenv/config";
 import express from "express";
 import multer from "multer";
 import nodemailer from "nodemailer";
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getSessionUser } from "./authMiddleware.js";
 import { rateLimit } from "./rateLimit.js";
@@ -33,7 +35,7 @@ const port = Number(process.env.PORT ?? defaultPort);
 const parentRecipient = process.env.PARENT_FORM_TO ?? "info@tutorhivehub.com";
 const tutorRecipient = process.env.TUTOR_FORM_TO ?? "admin@tutorhivehub.com";
 const publicInfoEmail = process.env.PUBLIC_INFO_EMAIL ?? "info@tutorhivehub.com";
-const clientIndexFile = path.join(rootDir, "dist", "index.html");
+const clientBuild = ensureClientBuild();
 const portalPublicRoutes = new Set([
   "/portal/login",
   "/portal/login/",
@@ -49,6 +51,54 @@ const portalPublicRoutes = new Set([
 
 const portalPublicRoutePattern = /^\/portal\/(?:login|forgot-password|reset-password|verify-email|access-denied)\/?$/;
 
+function clientBuildCandidates() {
+  return [
+    process.env.CLIENT_DIST_DIR,
+    path.join(rootDir, "dist"),
+    path.join(process.cwd(), "dist"),
+    path.join(__dirname, "..", "dist"),
+    path.join(__dirname, "dist"),
+  ].filter(Boolean);
+}
+
+function resolveClientBuild() {
+  for (const candidate of clientBuildCandidates()) {
+    const distDir = path.resolve(String(candidate));
+    const indexFile = path.join(distDir, "index.html");
+    if (existsSync(indexFile)) {
+      return { distDir, indexFile, found: true };
+    }
+  }
+
+  const distDir = path.resolve(process.env.CLIENT_DIST_DIR || path.join(rootDir, "dist"));
+  return { distDir, indexFile: path.join(distDir, "index.html"), found: false };
+}
+
+function ensureClientBuild() {
+  let build = resolveClientBuild();
+  if (build.found || process.env.NODE_ENV !== "production") {
+    return build;
+  }
+
+  console.warn(`TutorHiveHub client build not found at ${build.indexFile}. Running npm run build before startup.`);
+  const result = spawnSync("npm", ["run", "build"], {
+    cwd: rootDir,
+    shell: process.platform === "win32",
+    stdio: "inherit",
+  });
+
+  if (result.status !== 0) {
+    console.error(`TutorHiveHub client build failed with status ${result.status ?? "unknown"}.`);
+  }
+
+  build = resolveClientBuild();
+  if (!build.found) {
+    console.error(`TutorHiveHub client build is still missing. Checked: ${clientBuildCandidates().join(", ")}`);
+  }
+
+  return build;
+}
+
 function isPortalHost(request) {
   const forwardedHost = String(request.headers["x-forwarded-host"] ?? "").split(",")[0].trim();
   const rawHost = forwardedHost || String(request.headers.host ?? "");
@@ -57,7 +107,13 @@ function isPortalHost(request) {
 }
 
 function sendClientApp(_request, response, next) {
-  response.sendFile(clientIndexFile, (error) => {
+  const build = resolveClientBuild();
+  if (!build.found) {
+    next(new Error(`TutorHiveHub client build missing at ${build.indexFile}`));
+    return;
+  }
+
+  response.sendFile(build.indexFile, (error) => {
     if (error) {
       next(error);
     }
@@ -243,7 +299,7 @@ app.get(/^\/portal(?:\/.*)?$/, async (request, response, next) => {
   }
 });
 
-app.use(express.static(path.join(rootDir, "dist")));
+app.use(express.static(clientBuild.distDir));
 
 app.get(/.*/, sendClientApp);
 
