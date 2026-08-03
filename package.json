@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
+    "portal:bootstrap": "node scripts/bootstrapPortal.mjs",
     "portal:seed-roles": "node scripts/seedPortalRoles.mjs",
     "portal:create-super-admin": "node scripts/createInitialSuperAdmin.mjs",
     "test:phase10": "node --test tests/phase10.test.mjs"
