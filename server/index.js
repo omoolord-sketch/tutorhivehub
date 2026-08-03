@@ -17,6 +17,7 @@ import { registerPayrollRoutes } from "./payrollRoutes.js";
 import { registerPhase10Routes } from "./phase10Routes.js";
 import { registerPortalRoutes } from "./portalRoutes.js";
 import { registerSchedulingRoutes } from "./schedulingRoutes.js";
+import { runDatabaseDiagnostics } from "./databaseDiagnostics.js";
 import { applySecurityHeaders, csrfProtection, csrfTokenRoute, enforceHttps } from "./securityHardening.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -357,6 +358,22 @@ function handleSubmission({ formName, recipient }) {
 
 app.use(enforceHttps);
 app.use(applySecurityHeaders);
+app.get("/api/portal/diagnostics/database", async (request, response, next) => {
+  const expectedToken = process.env.PORTAL_DIAGNOSTIC_TOKEN;
+  const providedToken = String(request.query.token || request.headers["x-diagnostic-token"] || "");
+
+  if (!expectedToken || providedToken !== expectedToken) {
+    response.status(404).json({ ok: false, message: "Not found." });
+    return;
+  }
+
+  try {
+    const diagnostics = await runDatabaseDiagnostics();
+    response.status(diagnostics.ok ? 200 : 500).json(diagnostics);
+  } catch (error) {
+    next(error);
+  }
+});
 app.get("/api/security/csrf", csrfTokenRoute);
 app.use(csrfProtection);
 app.use("/api/portal", rateLimit({ windowMs: 60 * 1000, max: 300, keyPrefix: "portal-api" }));
