@@ -18,6 +18,7 @@ const allowedUploadMimeTypes = new Set([
 const masterDataPermissions = ["parents:manage", "students:manage", "tutors:manage", "subjects:manage", "assignments:manage"];
 
 const parentInclude = {
+  user: { select: { id: true, name: true, email: true, status: true } },
   students: {
     select: { id: true, fullName: true, yearGroup: true, status: true },
     orderBy: { fullName: "asc" },
@@ -38,6 +39,7 @@ const studentInclude = {
 };
 
 const tutorInclude = {
+  user: { select: { id: true, name: true, email: true, status: true } },
   subjects: { select: { id: true, name: true, examPathway: true, isActive: true } },
   studentAssignments: {
     include: {
@@ -393,6 +395,7 @@ function parseParentInput(body) {
   const email = required(body.email, "Parent email is required.").toLowerCase();
   return cleanData({
     fullName,
+    userId: optional(body.userId),
     email,
     phone: optional(body.phone),
     preferredContactMethod: optional(body.preferredContactMethod),
@@ -440,6 +443,7 @@ function parseTutorInput(body) {
     subjectIds,
     data: cleanData({
       fullName,
+      userId: optional(body.userId),
       email,
       phone: optional(body.phone),
       country: optional(body.country),

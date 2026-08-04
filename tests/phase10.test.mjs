@@ -91,6 +91,18 @@ test("timesheet calculation rules use generated lesson rows and payable eligibil
   assert.equal(amount, 45);
 });
 
+test("master data forms link parent and tutor profiles to portal user accounts", () => {
+  const serverSource = readFileSync(repoFile("server/masterDataRoutes.js"), "utf8");
+  const portalSource = readFileSync(repoFile("src/portal/master-data-pages.tsx"), "utf8");
+
+  assert.match(serverSource, /const parentInclude = \{\s+user:/);
+  assert.match(serverSource, /const tutorInclude = \{\s+user:/);
+  assert.match(serverSource, /userId: optional\(body\.userId\)/);
+  assert.match(portalSource, /Parent portal account/);
+  assert.match(portalSource, /Tutor portal account/);
+  assert.match(portalSource, /usersForRole\(lookups, "Tutor"\)/);
+});
+
 test("finance module records invoice totals, payments, receipts, and parent scoping", () => {
   const source = readFileSync(repoFile("server/financeRoutes.js"), "utf8");
   assert.match(source, /THH-INV/);

@@ -292,6 +292,12 @@ function formFields(entity: EntityName, record: RecordMap | null, lookups: Recor
       <>
         <PortalInput id="fullName" label="Parent full name" required defaultValue={record?.fullName ?? ""} />
         <PortalInput id="email" label="Email address" type="email" required defaultValue={record?.email ?? ""} />
+        <PortalSelect id="userId" label="Parent portal account" defaultValue={record?.userId ?? ""}>
+          <option value="">No linked parent login</option>
+          {usersForRole(lookups, "Parent").map((user: RecordMap) => (
+            <option key={user.id} value={user.id}>{user.name} - {user.email}</option>
+          ))}
+        </PortalSelect>
         <PortalInput id="phone" label="Phone number" type="tel" defaultValue={record?.phone ?? ""} />
         <PortalSelect id="preferredContactMethod" label="Preferred contact method" options={contactMethods} defaultValue={record?.preferredContactMethod ?? ""} />
         <PortalInput id="country" label="Country" defaultValue={record?.country ?? ""} />
@@ -344,6 +350,12 @@ function formFields(entity: EntityName, record: RecordMap | null, lookups: Recor
       <>
         <PortalInput id="fullName" label="Tutor full name" required defaultValue={record?.fullName ?? ""} />
         <PortalInput id="email" label="Email address" type="email" required defaultValue={record?.email ?? ""} />
+        <PortalSelect id="userId" label="Tutor portal account" defaultValue={record?.userId ?? ""}>
+          <option value="">No linked tutor login</option>
+          {usersForRole(lookups, "Tutor").map((user: RecordMap) => (
+            <option key={user.id} value={user.id}>{user.name} - {user.email}</option>
+          ))}
+        </PortalSelect>
         <PortalInput id="phone" label="Phone number" type="tel" defaultValue={record?.phone ?? ""} />
         <PortalInput id="country" label="Country" defaultValue={record?.country ?? ""} />
         <PortalInput id="timeZone" label="Time zone" defaultValue={record?.timeZone ?? ""} />
@@ -462,6 +474,10 @@ function selectedValues(form: HTMLFormElement, name: string) {
     return [];
   }
   return Array.from(field.selectedOptions).map((option) => option.value).filter(Boolean);
+}
+
+function usersForRole(lookups: RecordMap, roleName: string) {
+  return (lookups.users ?? []).filter((user: RecordMap) => user.role?.name === roleName);
 }
 
 function columnsFor(entity: EntityName) {
@@ -594,6 +610,7 @@ function detailItems(entity: EntityName, record: RecordMap): Array<[string, Reac
   if (entity === "parents") {
     return [
       ["Email", record.email],
+      ["Portal account", record.user ? `${record.user.name} / ${record.user.email}` : "Not linked"],
       ["Phone", record.phone],
       ["Preferred contact", record.preferredContactMethod],
       ["Country", record.country],
@@ -626,6 +643,7 @@ function detailItems(entity: EntityName, record: RecordMap): Array<[string, Reac
   if (entity === "tutors") {
     return [
       ["Email", record.email],
+      ["Portal account", record.user ? `${record.user.name} / ${record.user.email}` : "Not linked"],
       ["Phone", record.phone],
       ["Country", record.country],
       ["Time zone", record.timeZone],
