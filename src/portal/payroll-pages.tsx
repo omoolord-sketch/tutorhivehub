@@ -115,7 +115,7 @@ function TimesheetsOverview({ currentUser }: { currentUser: PortalUser }) {
         }
       >
         <PortalAlert title="Daily reports remain separate" tone="info">
-          Monthly timesheets are generated from completed lesson records for payment verification. Missing daily lesson reports are flagged for review.
+          Monthly timesheets are generated only from completed lessons with submitted daily reports. Lessons with missing reports are excluded until the report is submitted.
         </PortalAlert>
         {message && (
           <div className="mt-5">
@@ -131,7 +131,7 @@ function TimesheetsOverview({ currentUser }: { currentUser: PortalUser }) {
             lookups={lookups}
             defaultMonth={now.getMonth() + 1}
             defaultYear={now.getFullYear()}
-            onSubmit={(form) => submitJson("/api/portal/timesheets/generate", form, "Timesheet generated from lesson records.")}
+            onSubmit={(form) => submitJson("/api/portal/timesheets/generate", form, "Timesheet generated from completed lessons with submitted reports.")}
           />
           <TimesheetFilterForm lookups={lookups} canManage={canManage} onSubmit={handleFilter} />
         </div>
@@ -179,7 +179,7 @@ function GenerateTimesheetForm({
       <div className="md:col-span-2">
         <PortalButton type="submit">
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Generate from Completed Lessons
+          Generate from Verified Completed Lessons
         </PortalButton>
       </div>
     </form>
@@ -340,7 +340,7 @@ function TimesheetDetail({ timesheetId, currentUser }: { timesheetId: string; cu
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <PortalAlert title="Payment rules" tone="info">
-            Only completed and verified lessons are payable by default. Missing reports and student no-shows are marked for review.
+            Only completed lessons with submitted daily reports are included in generated timesheets. Missing-report lessons must be completed in Lesson Reports before they can appear here.
           </PortalAlert>
           {missingReports.length > 0 && (
             <PortalAlert title="Missing daily lesson reports" tone="warning">

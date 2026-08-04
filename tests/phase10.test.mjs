@@ -81,8 +81,10 @@ test("scheduling conflict guards are present for tutors, students, and availabil
 test("timesheet calculation rules use generated lesson rows and payable eligibility", () => {
   const source = readFileSync(repoFile("server/payrollRoutes.js"), "utf8");
   assert.match(source, /generateTimesheet/);
+  assert.match(source, /reportStatus: "SUBMITTED"/);
+  assert.match(source, /report: \{ isNot: null \}/);
   assert.match(source, /Completed and verified lesson/);
-  assert.match(source, /Daily lesson report is missing/);
+  assert.match(source, /Lessons without submitted daily reports are excluded from generated timesheets/);
   assert.match(source, /Tutors cannot approve or pay their own timesheets/);
 
   const amount = Math.round((2.5 * 18 + Number.EPSILON) * 100) / 100;

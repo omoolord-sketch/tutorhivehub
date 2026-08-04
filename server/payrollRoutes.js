@@ -13,7 +13,7 @@ const rateTypes = [
 const rateTypeKeys = new Set(rateTypes.map((rateType) => rateType.key));
 const timesheetStatuses = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "RETURNED", "APPROVED", "PAID", "REJECTED"];
 const reviewStatuses = ["UNDER_REVIEW", "RETURNED", "APPROVED", "PAID", "REJECTED"];
-const payableLessonStatuses = ["COMPLETED", "STUDENT_ABSENT", "TUTOR_ABSENT", "CANCELLED"];
+const payableLessonStatuses = ["COMPLETED"];
 const generatedTimesheetStatuses = ["DRAFT", "RETURNED"];
 const tutorFlagTypes = ["MISSING_LESSON", "INCORRECT_DURATION", "INCORRECT_RATE", "OTHER"];
 
@@ -322,6 +322,8 @@ async function generateTimesheet({ prisma, request, tutorId, month, year }) {
       where: {
         scheduledStart: { gte: monthStart, lt: monthEnd },
         status: { in: payableLessonStatuses },
+        reportStatus: "SUBMITTED",
+        report: { isNot: null },
         OR: [{ replacementTutorId: tutorId }, { tutorId, replacementTutorId: null }],
       },
       include: {
@@ -381,7 +383,7 @@ function buildEntryFromLesson(lesson, rates) {
     currency: applicableRate?.currency || "GBP",
     amountDue,
     attendanceStatus: attendanceSummary(lesson),
-    reportStatus: lesson.reportStatus || "NOT_DUE",
+    reportStatus: lesson.report ? "SUBMITTED" : lesson.reportStatus || "NOT_DUE",
     paymentEligibility: eligibility.status,
     eligibilityReason: eligibility.reason,
     lessonReportSubmitted: Boolean(lesson.report || lesson.reportStatus === "SUBMITTED"),
@@ -408,7 +410,7 @@ function paymentEligibility(lesson, applicableRate) {
     return { status: "REVIEW", reason: "Lesson is not marked completed." };
   }
   if (!hasReport) {
-    return { status: "REVIEW", reason: "Daily lesson report is missing." };
+    return { status: "REVIEW", reason: "Daily lesson report is missing. Lessons without submitted daily reports are excluded from generated timesheets." };
   }
   if (!applicableRate) {
     return { status: "REVIEW", reason: "No approved historical rate was found for this lesson date and type." };

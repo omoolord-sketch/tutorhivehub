@@ -306,6 +306,7 @@ export function registerPortalRoutes(app, { sendPortalEmail }) {
         return;
       }
 
+      const now = new Date();
       const user = await prisma.user.create({
         data: {
           email: input.email,
@@ -313,17 +314,29 @@ export function registerPortalRoutes(app, { sendPortalEmail }) {
           phone: input.phone,
           roleId: input.roleId,
           status: input.status,
-          activatedAt: input.status === "ACTIVE" ? new Date() : null,
-          deactivatedAt: input.status === "SUSPENDED" ? new Date() : null,
+          passwordHash: input.password ? hashPassword(input.password) : null,
+          passwordChangedAt: input.password ? now : null,
+          emailVerifiedAt: input.password ? now : null,
+          failedLoginCount: 0,
+          lockedUntil: null,
+          activatedAt: input.status === "ACTIVE" ? now : null,
+          deactivatedAt: input.status === "SUSPENDED" ? now : null,
         },
         include: { role: { include: { permissions: true } } },
       });
 
-      const resetToken = await createPasswordResetToken(prisma, user.id);
-      const verifyToken = await createEmailVerificationToken(prisma, user.id);
-      const resetUrl = portalUrl(`/portal/reset-password?token=${encodeURIComponent(resetToken)}`);
-      const verifyUrl = portalUrl(`/portal/verify-email?token=${encodeURIComponent(verifyToken)}`);
-      const delivered = await sendWelcomeEmail(sendPortalEmail, user.email, user.name, resetUrl, verifyUrl);
+      let resetUrl = null;
+      let verifyUrl = null;
+      let delivered = false;
+      if (input.password) {
+        delivered = await sendWelcomeEmail(sendPortalEmail, user.email, user.name, { passwordSet: true });
+      } else {
+        const resetToken = await createPasswordResetToken(prisma, user.id);
+        const verifyToken = await createEmailVerificationToken(prisma, user.id);
+        resetUrl = portalUrl(`/portal/reset-password?token=${encodeURIComponent(resetToken)}`);
+        verifyUrl = portalUrl(`/portal/verify-email?token=${encodeURIComponent(verifyToken)}`);
+        delivered = await sendWelcomeEmail(sendPortalEmail, user.email, user.name, { resetUrl, verifyUrl });
+      }
 
       await auditLog({
         request,
@@ -331,14 +344,14 @@ export function registerPortalRoutes(app, { sendPortalEmail }) {
         action: "user_created",
         entityType: "User",
         entityId: user.id,
-        metadata: { role: role.name, status: input.status },
+        metadata: { role: role.name, status: input.status, initialPasswordSet: Boolean(input.password) },
       });
 
       response.status(201).json({
         ok: true,
         user: safeUser(user),
-        devResetUrl: !delivered && process.env.NODE_ENV !== "production" ? resetUrl : null,
-        devVerifyUrl: !delivered && process.env.NODE_ENV !== "production" ? verifyUrl : null,
+        devResetUrl: resetUrl && !delivered && process.env.NODE_ENV !== "production" ? resetUrl : null,
+        devVerifyUrl: verifyUrl && !delivered && process.env.NODE_ENV !== "production" ? verifyUrl : null,
       });
     } catch (error) {
       if (error instanceof ValidationError) {
@@ -377,6 +390,17 @@ export function registerPortalRoutes(app, { sendPortalEmail }) {
       }
 
       await ensureNotRemovingLastSuperAdmin(prisma, request.params.id, role.name, input.status);
+      const now = new Date();
+      const passwordUpdate = input.password
+        ? {
+            passwordHash: hashPassword(input.password),
+            passwordChangedAt: now,
+            emailVerifiedAt: now,
+            failedLoginCount: 0,
+            lockedUntil: null,
+            sessions: { updateMany: { where: { revokedAt: null }, data: { revokedAt: now } } },
+          }
+        : {};
       const user = await prisma.user.update({
         where: { id: request.params.id },
         data: {
@@ -385,8 +409,9 @@ export function registerPortalRoutes(app, { sendPortalEmail }) {
           phone: input.phone,
           roleId: input.roleId,
           status: input.status,
-          activatedAt: input.status === "ACTIVE" ? new Date() : undefined,
-          deactivatedAt: input.status === "SUSPENDED" ? new Date() : null,
+          activatedAt: input.status === "ACTIVE" ? now : undefined,
+          deactivatedAt: input.status === "SUSPENDED" ? now : null,
+          ...passwordUpdate,
         },
         include: { role: { include: { permissions: true } } },
       });
@@ -397,7 +422,7 @@ export function registerPortalRoutes(app, { sendPortalEmail }) {
         action: "user_updated",
         entityType: "User",
         entityId: user.id,
-        metadata: { role: role.name, status: input.status },
+        metadata: { role: role.name, status: input.status, passwordChanged: Boolean(input.password) },
       });
 
       response.json({ ok: true, user: safeUser(user) });
@@ -520,7 +545,16 @@ async function createEmailVerificationToken(prisma, userId) {
   return token;
 }
 
-async function sendWelcomeEmail(sendPortalEmail, to, name, resetUrl, verifyUrl) {
+async function sendWelcomeEmail(sendPortalEmail, to, name, { resetUrl, verifyUrl, passwordSet = false }) {
+  if (passwordSet) {
+    return sendPortalEmail({
+      to,
+      subject: "TutorHiveHub Portal Account",
+      text: `Hello ${name},\n\nYour TutorHiveHub portal account has been created.\n\nTutorHiveHub administration has set an initial password for your account. For security, passwords are not sent by email. Please contact TutorHiveHub administration if you did not receive your login details.\n\nPortal login: ${portalUrl("/portal/login")}\n\nIf you did not expect this email, please contact TutorHiveHub administration.`,
+      html: `<p>Hello ${escapeHtml(name)},</p><p>Your TutorHiveHub portal account has been created.</p><p>TutorHiveHub administration has set an initial password for your account. For security, passwords are not sent by email. Please contact TutorHiveHub administration if you did not receive your login details.</p><p><a href="${escapeHtml(portalUrl("/portal/login"))}">Open portal login</a></p><p>If you did not expect this email, please contact TutorHiveHub administration.</p>`,
+    });
+  }
+
   return sendPortalEmail({
     to,
     subject: "TutorHiveHub Portal Account",
@@ -544,6 +578,8 @@ function parseUserInput(body) {
   const phone = String(body?.phone ?? "").trim();
   const roleId = String(body?.roleId ?? "").trim();
   const status = String(body?.status ?? "INVITED").trim();
+  const password = String(body?.password ?? "");
+  const confirmPassword = String(body?.confirmPassword ?? "");
 
   if (!name || !email || !roleId) {
     throw new ValidationError("Please complete all required user fields.");
@@ -553,12 +589,24 @@ function parseUserInput(body) {
     throw new ValidationError("Please select a valid account status.");
   }
 
+  if (password || confirmPassword) {
+    if (password !== confirmPassword) {
+      throw new ValidationError("Passwords do not match.");
+    }
+    try {
+      assertValidPassword(password);
+    } catch (error) {
+      throw new ValidationError(error instanceof Error ? error.message : "Please enter a valid password.");
+    }
+  }
+
   return {
     email,
     name,
     phone: phone || null,
     roleId,
     status,
+    password: password || null,
   };
 }
 

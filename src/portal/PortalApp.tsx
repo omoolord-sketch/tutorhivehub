@@ -834,9 +834,19 @@ function UserFormPage({ mode, userId }: { mode: "create" | "edit"; userId?: stri
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
+    const password = String(data.get("password") ?? "");
+    const confirmPassword = String(data.get("confirmPassword") ?? "");
     setSubmitStatus("loading");
     setMessage("");
     setDevLinks({});
+
+    if (password || confirmPassword) {
+      if (password !== confirmPassword) {
+        setSubmitStatus("error");
+        setMessage("Passwords do not match.");
+        return;
+      }
+    }
 
     try {
       const endpoint = mode === "edit" && userId ? `/api/portal/users/${userId}` : "/api/portal/users";
@@ -849,12 +859,22 @@ function UserFormPage({ mode, userId }: { mode: "create" | "edit"; userId?: stri
           phone: data.get("phone"),
           roleId: data.get("roleId"),
           status: data.get("status"),
+          password,
+          confirmPassword,
         }),
       });
       setUser(result.user);
       setDevLinks({ reset: result.devResetUrl, verify: result.devVerifyUrl });
       setSubmitStatus("success");
-      setMessage(mode === "edit" ? "User updated successfully." : "User created successfully.");
+      setMessage(
+        password
+          ? mode === "edit"
+            ? "User updated and password changed successfully."
+            : "User created with an initial password. Share it securely; TutorHiveHub does not email passwords."
+          : mode === "edit"
+            ? "User updated successfully."
+            : "User created successfully.",
+      );
       if (mode === "create") {
         form.reset();
       }
@@ -887,6 +907,15 @@ function UserFormPage({ mode, userId }: { mode: "create" | "edit"; userId?: stri
           ))}
         </PortalSelect>
         <PortalSelect id="status" label="Account status" required options={["INVITED", "ACTIVE", "SUSPENDED", "ARCHIVED"]} defaultValue={user?.status ?? "INVITED"} />
+        <div className="md:col-span-2">
+          <PortalAlert title="Password access" tone="info">
+            {mode === "create"
+              ? "Set an optional initial password if this user should receive login access straight away. Leave it blank to send the normal password setup email. Users can later change their password using Forgot password, and admins can use Reset Password from the user list."
+              : "Enter a new password only when you want to change this user's password. Leave both password fields blank to keep the current password."}
+          </PortalAlert>
+        </div>
+        <PortalInput id="password" label={mode === "create" ? "Initial password (optional)" : "New password (optional)"} type="password" autoComplete="new-password" minLength={12} />
+        <PortalInput id="confirmPassword" label="Confirm password" type="password" autoComplete="new-password" minLength={12} />
         <div className="md:col-span-2">
           {submitStatus === "success" && <PortalAlert title="Saved" tone="success">{message}</PortalAlert>}
           {submitStatus === "error" && <PortalAlert title="Could not save" tone="error">{message}</PortalAlert>}
