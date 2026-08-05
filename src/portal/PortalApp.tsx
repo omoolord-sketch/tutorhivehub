@@ -586,14 +586,14 @@ function PortalShell({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
+                <a
+                  href="/portal/notifications"
                   className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-navy transition hover:border-gold hover:bg-gold-50"
                   aria-label="Notifications"
                 >
                   <Bell className="h-5 w-5" aria-hidden="true" />
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-gold" />
-                </button>
+                </a>
                 <div className="hidden items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 sm:flex">
                   <UserCircle className="h-6 w-6 text-navy" aria-hidden="true" />
                   <div className="leading-tight">
@@ -621,6 +621,8 @@ function PortalShell({
 }
 
 function PortalSidebar({ activeModule, user, onNavigate }: { activeModule: PortalModule; user: PortalUser; onNavigate?: () => void }) {
+  const visibleModules = visiblePortalModules(user);
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-white/10 p-5">
@@ -634,7 +636,7 @@ function PortalSidebar({ activeModule, user, onNavigate }: { activeModule: Porta
         )}
       </div>
       <nav className="grid gap-1 overflow-y-auto p-4" aria-label="Portal navigation">
-        {portalModules.map((module) => {
+        {visibleModules.map((module) => {
           const Icon = module.icon;
           const isActive = module.id === activeModule.id;
           const isEnabled = portalFeatureFlags[module.id];
@@ -667,6 +669,17 @@ function PortalSidebar({ activeModule, user, onNavigate }: { activeModule: Porta
       </div>
     </div>
   );
+}
+
+function visiblePortalModules(user: PortalUser) {
+  if (!hideRestrictedModules(user)) {
+    return portalModules;
+  }
+  return portalModules.filter((module) => canAccessModule(user, module));
+}
+
+function hideRestrictedModules(user: PortalUser) {
+  return ["Tutor", "Parent", "Student"].includes(user.role?.name ?? "");
 }
 
 function PortalDashboard({ currentPath, currentUser }: { currentPath: string; currentUser: PortalUser }) {

@@ -10,6 +10,17 @@ const approvedAvailabilityStatuses = ["APPROVED", "OVERRIDDEN"];
 const availabilityExceptionTypes = ["UNAVAILABLE", "HOLIDAY", "TEMPORARY_AVAILABLE", "TEMPORARY_UNAVAILABLE"];
 const lessonStatuses = ["SCHEDULED", "TUTOR_READY", "IN_PROGRESS", "COMPLETED", "STUDENT_ABSENT", "TUTOR_ABSENT", "CANCELLED", "RESCHEDULED"];
 const activeLessonStatuses = ["SCHEDULED", "TUTOR_READY", "IN_PROGRESS"];
+const defaultTimeZone = "United Kingdom (GMT/BST)";
+const timeZoneAliases = new Map([
+  [defaultTimeZone, "Europe/London"],
+  ["GMT/BST", "Europe/London"],
+  ["UK", "Europe/London"],
+  ["United Kingdom", "Europe/London"],
+  ["Nigeria (WAT)", "Africa/Lagos"],
+  ["WAT", "Africa/Lagos"],
+  ["Nigeria", "Africa/Lagos"],
+  ["UTC", "UTC"],
+]);
 const lessonTypes = [
   "One-to-One Tutoring",
   "Group Lesson",
@@ -360,8 +371,9 @@ async function buildLessonPlan(prisma, body, createdById, currentLessonId = null
     throw new ValidationError("Please select a valid lesson type.");
   }
 
-  const scheduledStart = combineDateTime(body.date, body.startTime);
-  const scheduledEnd = combineDateTime(body.date, body.endTime);
+  const timeZone = optional(body.timeZone) || defaultTimeZone;
+  const scheduledStart = combineDateTime(body.date, body.startTime, timeZone);
+  const scheduledEnd = combineDateTime(body.date, body.endTime, timeZone);
   assertTimeOrder(scheduledStart, scheduledEnd);
 
   const durationMinutes = Math.round((scheduledEnd.getTime() - scheduledStart.getTime()) / 60000);
@@ -384,7 +396,7 @@ async function buildLessonPlan(prisma, body, createdById, currentLessonId = null
   }
 
   const recurrencePattern = String(body.recurrencePattern || "NONE");
-  const recurrence = parseRecurrence(recurrencePattern, scheduledStart, scheduledEnd, body);
+  const recurrence = parseRecurrence(recurrencePattern, scheduledStart, scheduledEnd, body, timeZone);
   const recurrenceGroupId = recurrencePattern === "WEEKLY" ? currentLessonId ? optional(body.recurrenceGroupId) || randomUUID() : randomUUID() : null;
   const primaryStudent = students.find((student) => student.id === studentIds[0]) ?? students[0];
 
@@ -397,7 +409,7 @@ async function buildLessonPlan(prisma, body, createdById, currentLessonId = null
     effectiveTutorId: optional(body.replacementTutorId) || tutorId,
     subjectId,
     lessonType,
-    timeZone: optional(body.timeZone) || "United Kingdom (GMT/BST)",
+    timeZone,
     durationMinutes,
     meetingLink: optional(body.meetingLink),
     lessonObjective: optional(body.lessonObjective),
@@ -456,7 +468,7 @@ async function assertScheduleIsValid(prisma, plan, currentLessonId = null) {
     });
 
     if (tutorConflict) {
-      conflicts.push(`${dateTimeText(occurrence.start)} conflicts with another tutor booking for ${tutorConflict.student?.fullName ?? "a student"}.`);
+      conflicts.push(`${dateTimeText(occurrence.start, plan.timeZone)} conflicts with another tutor booking for ${tutorConflict.student?.fullName ?? "a student"}.`);
     }
 
     const studentConflict = await prisma.lesson.findFirst({
@@ -471,12 +483,12 @@ async function assertScheduleIsValid(prisma, plan, currentLessonId = null) {
     });
 
     if (studentConflict) {
-      conflicts.push(`${dateTimeText(occurrence.start)} conflicts with another student booking with ${studentConflict.tutor?.fullName ?? "a tutor"}.`);
+      conflicts.push(`${dateTimeText(occurrence.start, plan.timeZone)} conflicts with another student booking with ${studentConflict.tutor?.fullName ?? "a tutor"}.`);
     }
 
     const availabilityConflict = await checkTutorAvailability(prisma, plan.effectiveTutorId, occurrence.start, occurrence.end, plan.timeZone);
     if (availabilityConflict) {
-      conflicts.push(`${dateTimeText(occurrence.start)} is outside approved tutor availability: ${availabilityConflict}`);
+      conflicts.push(`${dateTimeText(occurrence.start, plan.timeZone)} is outside approved tutor availability: ${availabilityConflict}`);
     }
   }
 
@@ -485,30 +497,28 @@ async function assertScheduleIsValid(prisma, plan, currentLessonId = null) {
   }
 }
 
-async function checkTutorAvailability(prisma, tutorId, start, end) {
-  const dayStart = startOfDay(start);
-  const dayEnd = addDays(dayStart, 1);
-  const startMinutes = timeToMinutes(timeValue(start));
-  const endMinutes = timeToMinutes(timeValue(end));
-
+async function checkTutorAvailability(prisma, tutorId, start, end, lessonTimeZone = defaultTimeZone) {
   const exceptions = await prisma.tutorAvailabilityException.findMany({
     where: {
       tutorId,
       status: { in: approvedAvailabilityStatuses },
-      exceptionDate: { gte: dayStart, lt: dayEnd },
+      exceptionDate: { gte: addDays(start, -2), lt: addDays(end, 2) },
     },
   });
 
   for (const exception of exceptions) {
-    if ((exception.exceptionType === "UNAVAILABLE" || exception.exceptionType === "HOLIDAY") && exceptionCovers(exception, startMinutes, endMinutes)) {
+    if (!exceptionAppliesToLesson(exception, start, end, lessonTimeZone)) {
+      continue;
+    }
+    if (exception.exceptionType === "UNAVAILABLE" || exception.exceptionType === "HOLIDAY") {
       return exception.exceptionType === "HOLIDAY" ? "tutor is marked as on holiday." : "tutor is unavailable.";
     }
-    if (exception.exceptionType === "TEMPORARY_UNAVAILABLE" && exceptionCovers(exception, startMinutes, endMinutes)) {
+    if (exception.exceptionType === "TEMPORARY_UNAVAILABLE") {
       return "temporary unavailability overlaps this lesson.";
     }
   }
 
-  const temporaryAvailability = exceptions.some((exception) => exception.exceptionType === "TEMPORARY_AVAILABLE" && exceptionCovers(exception, startMinutes, endMinutes));
+  const temporaryAvailability = exceptions.some((exception) => exception.exceptionType === "TEMPORARY_AVAILABLE" && exceptionAppliesToLesson(exception, start, end, lessonTimeZone));
   if (temporaryAvailability) {
     return null;
   }
@@ -518,12 +528,24 @@ async function checkTutorAvailability(prisma, tutorId, start, end) {
       tutorId,
       status: { in: approvedAvailabilityStatuses },
       recurring: true,
-      dayOfWeek: start.getDay(),
     },
   });
 
-  const covered = rules.some((rule) => timeToMinutes(rule.startTime) <= startMinutes && timeToMinutes(rule.endTime) >= endMinutes);
+  const covered = rules.some((rule) => {
+    const ruleTimeZone = resolveTimeZone(rule.timeZone || lessonTimeZone);
+    const lessonWindow = zonedLessonWindow(start, end, ruleTimeZone);
+    return Number(rule.dayOfWeek) === lessonWindow.dayOfWeek && timeToMinutes(rule.startTime) <= lessonWindow.startMinutes && timeToMinutes(rule.endTime) >= lessonWindow.endMinutes;
+  });
   return covered ? null : "no approved availability covers this time.";
+}
+
+function exceptionAppliesToLesson(exception, start, end, lessonTimeZone) {
+  const exceptionTimeZone = resolveTimeZone(exception.timeZone || lessonTimeZone);
+  if (zonedDateKey(exception.exceptionDate, exceptionTimeZone) !== zonedDateKey(start, exceptionTimeZone)) {
+    return false;
+  }
+  const lessonWindow = zonedLessonWindow(start, end, exceptionTimeZone);
+  return exceptionCovers(exception, lessonWindow.startMinutes, lessonWindow.endMinutes);
 }
 
 function exceptionCovers(exception, startMinutes, endMinutes) {
@@ -598,7 +620,7 @@ function notificationTitle(eventType) {
 function notificationMessage(lesson, eventType) {
   const students = (lesson.students?.length ? lesson.students : [lesson.student]).map((student) => student?.fullName).filter(Boolean).join(", ");
   const tutorName = lesson.replacementTutor?.fullName ? `${lesson.replacementTutor.fullName} (replacement tutor)` : lesson.tutor?.fullName;
-  return `${notificationTitle(eventType)}: ${lesson.subject?.name ?? "Lesson"} with ${tutorName ?? "TutorHiveHub"} for ${students || "student"} on ${dateTimeText(lesson.scheduledStart)} (${lesson.timeZone || "time zone not set"}).`;
+  return `${notificationTitle(eventType)}: ${lesson.subject?.name ?? "Lesson"} with ${tutorName ?? "TutorHiveHub"} for ${students || "student"} on ${dateTimeText(lesson.scheduledStart, lesson.timeZone)} (${lesson.timeZone || "time zone not set"}).`;
 }
 
 async function lessonScopeWhere(prisma, request) {
@@ -702,13 +724,14 @@ async function parseAvailabilityExceptionInput(prisma, request, existing = null)
     assertTimeStrings(startTime, endTime);
   }
   const status = canManage ? parseAvailabilityStatus(request.body?.status || existing?.status || "PENDING") : "PENDING";
+  const timeZone = required(request.body?.timeZone, "Time zone is required.");
   return cleanData({
     tutorId,
-    exceptionDate: requiredDate(request.body?.exceptionDate, "Exception date is required."),
+    exceptionDate: zonedDateStart(request.body?.exceptionDate, timeZone, "Exception date is required."),
     exceptionType,
     startTime,
     endTime,
-    timeZone: required(request.body?.timeZone, "Time zone is required."),
+    timeZone,
     status,
     approvedById: canManage && (status === "APPROVED" || status === "OVERRIDDEN") ? request.portalUser.id : undefined,
     approvedAt: canManage && (status === "APPROVED" || status === "OVERRIDDEN") ? new Date() : undefined,
@@ -768,7 +791,7 @@ function dateRangeFromQuery(query) {
   });
 }
 
-function parseRecurrence(pattern, scheduledStart, scheduledEnd, body) {
+function parseRecurrence(pattern, scheduledStart, scheduledEnd, body, timeZone = defaultTimeZone) {
   if (pattern === "NONE") {
     return [{ start: scheduledStart, end: scheduledEnd }];
   }
@@ -777,7 +800,7 @@ function parseRecurrence(pattern, scheduledStart, scheduledEnd, body) {
   }
 
   const occurrenceCount = optionalInt(body.occurrenceCount, 2, 52, "Recurring lessons must have between 2 and 52 occurrences.");
-  const recurrenceEndDate = optional(body.recurrenceEndDate) ? requiredDate(body.recurrenceEndDate, "Invalid recurrence end date.") : null;
+  const recurrenceEndDate = optional(body.recurrenceEndDate) ? dateKeyFromParts(parseDateParts(body.recurrenceEndDate, "Invalid recurrence end date.")) : null;
   if (!occurrenceCount && !recurrenceEndDate) {
     throw new ValidationError("Recurring weekly lessons need an occurrence count or an end date.");
   }
@@ -787,12 +810,12 @@ function parseRecurrence(pattern, scheduledStart, scheduledEnd, body) {
   let currentEnd = new Date(scheduledEnd);
   const max = occurrenceCount || 52;
   for (let index = 0; index < max; index += 1) {
-    if (recurrenceEndDate && currentStart > addDays(recurrenceEndDate, 1)) {
+    if (recurrenceEndDate && zonedDateKey(currentStart, timeZone) > recurrenceEndDate) {
       break;
     }
     occurrences.push({ start: new Date(currentStart), end: new Date(currentEnd) });
-    currentStart = addDays(currentStart, 7);
-    currentEnd = addDays(currentEnd, 7);
+    currentStart = addZonedDays(currentStart, 7, timeZone);
+    currentEnd = addZonedDays(currentEnd, 7, timeZone);
   }
 
   if (occurrences.length < 2) {
@@ -805,10 +828,8 @@ function canManageLessons(user) {
   return hasPermission(user, "lessons:manage") || hasPermission(user, "timetable:manage");
 }
 
-function combineDateTime(date, time) {
-  const dateValue = required(date, "Date is required.");
-  const timeValueText = requiredTime(time, "Time is required.");
-  const parsed = new Date(`${dateValue}T${timeValueText}:00`);
+function combineDateTime(date, time, timeZone = defaultTimeZone) {
+  const parsed = zonedDateTimeToUtc(parseDateParts(date, "Date is required."), parseTimeParts(requiredTime(time, "Time is required.")), timeZone);
   if (Number.isNaN(parsed.getTime())) {
     throw new ValidationError("Please enter a valid lesson date and time.");
   }
@@ -887,10 +908,8 @@ function optionalTime(value) {
   if (!cleaned) {
     return null;
   }
-  if (!/^\d{2}:\d{2}$/.test(cleaned)) {
-    throw new ValidationError("Please enter time in HH:MM format.");
-  }
-  return cleaned;
+  const { hours, minutes } = parseTimeParts(cleaned);
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function requiredDate(value, message) {
@@ -923,12 +942,34 @@ function timeToMinutes(value) {
   return hours * 60 + minutes;
 }
 
-function timeValue(date) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+function parseDateParts(value, message) {
+  const cleaned = required(value, message);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(cleaned);
+  if (!match) {
+    throw new ValidationError(message);
+  }
+  const [, yearText, monthText, dayText] = match;
+  const year = Number.parseInt(yearText, 10);
+  const month = Number.parseInt(monthText, 10);
+  const day = Number.parseInt(dayText, 10);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    throw new ValidationError(message);
+  }
+  return { year, month, day };
 }
 
-function startOfDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function parseTimeParts(value) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value ?? "").trim());
+  if (!match) {
+    throw new ValidationError("Please enter time in HH:MM format.");
+  }
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  if (hours > 23 || minutes > 59) {
+    throw new ValidationError("Please enter a valid time.");
+  }
+  return { hours, minutes };
 }
 
 function addDays(date, days) {
@@ -937,8 +978,135 @@ function addDays(date, days) {
   return next;
 }
 
-function dateTimeText(value) {
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+function zonedDateStart(date, timeZone, message) {
+  return zonedDateTimeToUtc(parseDateParts(date, message), { hours: 0, minutes: 0 }, timeZone);
+}
+
+function zonedDateTimeToUtc(dateParts, timeParts, timeZone) {
+  const zone = resolveTimeZone(timeZone);
+  const utcGuess = Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, timeParts.hours, timeParts.minutes, 0, 0);
+  const firstOffset = timeZoneOffsetMs(new Date(utcGuess), zone);
+  let utcTime = utcGuess - firstOffset;
+  const secondOffset = timeZoneOffsetMs(new Date(utcTime), zone);
+  if (secondOffset !== firstOffset) {
+    utcTime = utcGuess - secondOffset;
+  }
+  return new Date(utcTime);
+}
+
+function addZonedDays(date, days, timeZone) {
+  const zone = resolveTimeZone(timeZone);
+  const parts = zonedDateTimeParts(date, zone);
+  const nextDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return zonedDateTimeToUtc(
+    { year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() + 1, day: nextDate.getUTCDate() },
+    { hours: parts.hour, minutes: parts.minute },
+    zone,
+  );
+}
+
+function zonedLessonWindow(start, end, timeZone) {
+  const zone = resolveTimeZone(timeZone);
+  const startParts = zonedDateTimeParts(start, zone);
+  const endParts = zonedDateTimeParts(end, zone);
+  return {
+    dayOfWeek: dayOfWeekFromParts(startParts),
+    startMinutes: startParts.hour * 60 + startParts.minute,
+    endMinutes: endParts.hour * 60 + endParts.minute,
+  };
+}
+
+function zonedDateKey(value, timeZone) {
+  return dateKeyFromParts(zonedDateTimeParts(value, resolveTimeZone(timeZone)));
+}
+
+function dateKeyFromParts(parts) {
+  return `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function dayOfWeekFromParts(parts) {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+}
+
+const dateTimeFormatters = new Map();
+
+function zonedDateTimeParts(value, timeZone) {
+  const zone = resolveTimeZone(timeZone);
+  const formatter = getDateTimePartsFormatter(zone);
+  const values = {};
+  for (const part of formatter.formatToParts(new Date(value))) {
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
+  }
+  return {
+    year: Number.parseInt(values.year, 10),
+    month: Number.parseInt(values.month, 10),
+    day: Number.parseInt(values.day, 10),
+    hour: Number.parseInt(values.hour, 10),
+    minute: Number.parseInt(values.minute, 10),
+    second: Number.parseInt(values.second || "0", 10),
+  };
+}
+
+function getDateTimePartsFormatter(timeZone) {
+  if (!dateTimeFormatters.has(timeZone)) {
+    dateTimeFormatters.set(timeZone, new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }));
+  }
+  return dateTimeFormatters.get(timeZone);
+}
+
+function timeZoneOffsetMs(date, timeZone) {
+  const parts = zonedDateTimeParts(date, timeZone);
+  const localAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, 0);
+  return localAsUtc - date.getTime();
+}
+
+function resolveTimeZone(value) {
+  const cleaned = optional(value) || defaultTimeZone;
+  const explicit = timeZoneAliases.get(cleaned);
+  const inferred = explicit || inferTimeZone(cleaned);
+  if (isValidTimeZone(inferred)) {
+    return inferred;
+  }
+  return "UTC";
+}
+
+function inferTimeZone(value) {
+  const cleaned = String(value || "").trim();
+  const lowered = cleaned.toLowerCase();
+  if (lowered.includes("united kingdom") || lowered.includes("gmt/bst") || lowered.includes("london")) {
+    return "Europe/London";
+  }
+  if (lowered.includes("nigeria") || lowered.includes("wat") || lowered.includes("lagos")) {
+    return "Africa/Lagos";
+  }
+  if (lowered === "other") {
+    return "UTC";
+  }
+  return cleaned;
+}
+
+function isValidTimeZone(timeZone) {
+  try {
+    new Intl.DateTimeFormat("en-GB", { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function dateTimeText(value, timeZone = defaultTimeZone) {
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: resolveTimeZone(timeZone) }).format(new Date(value));
 }
 
 function escapeHtml(value) {
@@ -978,3 +1146,12 @@ class ValidationError extends Error {}
 class ConflictError extends Error {}
 class ForbiddenError extends Error {}
 class NotFoundError extends Error {}
+
+export const __schedulingTestInternals = {
+  checkTutorAvailability,
+  combineDateTime,
+  dateTimeText,
+  parseRecurrence,
+  resolveTimeZone,
+  zonedDateKey,
+};

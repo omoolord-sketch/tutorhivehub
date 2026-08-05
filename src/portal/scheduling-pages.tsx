@@ -28,7 +28,18 @@ const dayOptions = [
   { id: "6", name: "Saturday" },
 ];
 
-const commonTimeZones = ["United Kingdom (GMT/BST)", "Nigeria (WAT)", "UTC", "Other"];
+const defaultTimeZone = "United Kingdom (GMT/BST)";
+const commonTimeZones = [defaultTimeZone, "Nigeria (WAT)", "UTC", "Other"];
+const timeZoneAliases: Record<string, string> = {
+  [defaultTimeZone]: "Europe/London",
+  "GMT/BST": "Europe/London",
+  UK: "Europe/London",
+  "United Kingdom": "Europe/London",
+  "Nigeria (WAT)": "Africa/Lagos",
+  WAT: "Africa/Lagos",
+  Nigeria: "Africa/Lagos",
+  UTC: "UTC",
+};
 const recurrenceOptions = ["NONE", "WEEKLY"];
 const viewOptions = ["Daily", "Weekly", "Monthly", "Admin", "Tutor", "Student"];
 
@@ -164,7 +175,7 @@ function LessonTable({ lessons }: { lessons: RecordMap[] }) {
       columns={["Date", "Students", "Tutor", "Subject", "Type", "Status", "Actions"]}
       rows={lessons.map((lesson) => [
         <div>
-          <p className="font-black text-navy">{dateText(lesson.scheduledStart)}</p>
+          <p className="font-black text-navy">{dateText(lesson.scheduledStart, lesson.timeZone)}</p>
           <p className="text-xs font-bold text-slate-500">{timeRange(lesson)} - {lesson.timeZone || "No time zone"}</p>
         </div>,
         names(lesson.students?.length ? lesson.students : [lesson.student]),
@@ -241,10 +252,10 @@ function LessonForm({ mode, lessonId }: { mode: "create" | "edit"; lessonId?: st
         <LookupSelect id="subjectId" label="Subject" records={lookups.subjects ?? []} required defaultValue={lesson?.subjectId ?? ""} />
         <PortalSelect id="lessonType" label="Lesson type" required options={lookups.lessonTypes ?? []} defaultValue={lesson?.lessonType ?? "One-to-One Tutoring"} />
         <PortalSelect id="status" label="Lesson status" required options={lookups.lessonStatuses ?? []} defaultValue={lesson?.status ?? "SCHEDULED"} />
-        <PortalInput id="date" label="Date" type="date" required defaultValue={dateInput(lesson?.scheduledStart)} />
-        <PortalInput id="startTime" label="Start time" type="time" required defaultValue={timeInput(lesson?.scheduledStart)} />
-        <PortalInput id="endTime" label="End time" type="time" required defaultValue={timeInput(lesson?.scheduledEnd)} />
-        <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue={lesson?.timeZone ?? "United Kingdom (GMT/BST)"} />
+        <PortalInput id="date" label="Date" type="date" required defaultValue={dateInput(lesson?.scheduledStart, lesson?.timeZone)} />
+        <PortalInput id="startTime" label="Start time" type="time" required defaultValue={timeInput(lesson?.scheduledStart, lesson?.timeZone)} />
+        <PortalInput id="endTime" label="End time" type="time" required defaultValue={timeInput(lesson?.scheduledEnd, lesson?.timeZone)} />
+        <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue={lesson?.timeZone ?? defaultTimeZone} />
         <PortalSelect id="recurrencePattern" label="Recurrence pattern" options={recurrenceOptions} defaultValue={lesson?.recurrencePattern ?? "NONE"} />
         <PortalInput id="occurrenceCount" label="Weekly occurrences" type="number" min="2" max="52" placeholder="Only for weekly recurrence" />
         <PortalInput id="recurrenceEndDate" label="Recurrence end date" type="date" />
@@ -313,7 +324,7 @@ function LessonProfile({ lessonId }: { lessonId: string }) {
   return (
     <div className="grid gap-6">
       <PortalCard
-        title={`${lesson.subject?.name ?? "Lesson"} - ${dateText(lesson.scheduledStart)}`}
+        title={`${lesson.subject?.name ?? "Lesson"} - ${dateText(lesson.scheduledStart, lesson.timeZone)}`}
         eyebrow="Lesson Profile"
         action={
           <div className="flex flex-wrap gap-2">
@@ -330,7 +341,7 @@ function LessonProfile({ lessonId }: { lessonId: string }) {
               ["Subject", lesson.subject?.name],
               ["Lesson type", lesson.lessonType],
               ["Status", <PortalBadge tone={lessonStatusTone(lesson.status)}>{lessonStatusLabel(lesson.status)}</PortalBadge>],
-              ["Time", `${dateText(lesson.scheduledStart)} ${timeRange(lesson)}`],
+              ["Time", `${dateText(lesson.scheduledStart, lesson.timeZone)} ${timeRange(lesson)}`],
               ["Time zone", lesson.timeZone],
               ["Duration", lesson.durationMinutes ? `${lesson.durationMinutes} minutes` : "-"],
               ["Meeting link", lesson.meetingLink ? <a className="break-all underline" href={lesson.meetingLink}>{lesson.meetingLink}</a> : "-"],
@@ -387,7 +398,7 @@ function LessonActions({ lesson, lookups, onAction }: { lesson: RecordMap; looku
         <PortalInput id="date" label="New date" type="date" required />
         <PortalInput id="startTime" label="New start time" type="time" required />
         <PortalInput id="endTime" label="New end time" type="time" required />
-        <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue={lesson.timeZone ?? "United Kingdom (GMT/BST)"} />
+        <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue={lesson.timeZone ?? defaultTimeZone} />
         <LookupSelect id="replacementTutorId" label="Replacement tutor" records={lookups.tutors ?? []} />
         <PortalInput id="meetingLink" label="Meeting link" type="url" defaultValue={lesson.meetingLink ?? ""} />
         <PortalTextarea id="notes" label="Notes" defaultValue={lesson.notes ?? ""} />
@@ -407,7 +418,7 @@ function TimetablePage({ currentUser }: { currentUser: PortalUser }) {
   const [status, setStatus] = useState<LoadState>("loading");
   const [message, setMessage] = useState("");
   const [view, setView] = useState("Weekly");
-  const [anchorDate, setAnchorDate] = useState(dateInput(new Date().toISOString()));
+  const [anchorDate, setAnchorDate] = useState(dateInput(new Date().toISOString(), defaultTimeZone));
 
   async function loadTimetable(filters: RecordMap = {}) {
     setStatus("loading");
@@ -488,7 +499,7 @@ function TimetableFilterForm({ lookups, view, anchorDate, onSubmit }: { lookups:
 
 function TimetableGrid({ lessons }: { lessons: RecordMap[] }) {
   const grouped = lessons.reduce<Record<string, RecordMap[]>>((groups, lesson) => {
-    const key = dateText(lesson.scheduledStart);
+    const key = dateText(lesson.scheduledStart, lesson.timeZone);
     groups[key] = groups[key] ?? [];
     groups[key].push(lesson);
     return groups;
@@ -624,7 +635,7 @@ function AvailabilityPage() {
             columns={["Tutor", "Date", "Type", "Times", "Status", "Actions"]}
             rows={exceptions.map((item) => [
               item.tutor?.fullName || "-",
-              dateText(item.exceptionDate),
+              dateText(item.exceptionDate, item.timeZone),
               item.exceptionType,
               item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : "All day",
               <PortalBadge tone={availabilityTone(item.status)}>{item.status}</PortalBadge>,
@@ -648,7 +659,7 @@ function AvailabilityRuleForm({ lookups, onSubmit }: { lookups: RecordMap; onSub
       </PortalSelect>
       <PortalInput id="startTime" label="Start time" type="time" required />
       <PortalInput id="endTime" label="End time" type="time" required />
-      <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue="United Kingdom (GMT/BST)" />
+      <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue={defaultTimeZone} />
       <PortalSelect id="status" label="Status" options={lookups.availabilityStatuses ?? []} defaultValue="PENDING" />
       <PortalTextarea id="notes" label="Notes" />
       <PortalButton type="submit">Save Availability</PortalButton>
@@ -665,7 +676,7 @@ function AvailabilityExceptionForm({ lookups, onSubmit }: { lookups: RecordMap; 
       <PortalSelect id="exceptionType" label="Type" required options={lookups.availabilityExceptionTypes ?? []} />
       <PortalInput id="startTime" label="Start time" type="time" />
       <PortalInput id="endTime" label="End time" type="time" />
-      <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue="United Kingdom (GMT/BST)" />
+      <PortalSelect id="timeZone" label="Time zone" required options={commonTimeZones} defaultValue={defaultTimeZone} />
       <PortalSelect id="status" label="Status" options={lookups.availabilityStatuses ?? []} defaultValue="PENDING" />
       <PortalTextarea id="notes" label="Notes" />
       <PortalButton type="submit">Save Change</PortalButton>
@@ -758,22 +769,78 @@ function formatDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function dateInput(value?: string | null) {
-  return value ? formatDate(new Date(value)) : "";
+function dateInput(value?: string | null, timeZone?: string | null) {
+  const parts = zonedDateTimeParts(value, timeZone);
+  return parts ? `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}` : "";
 }
 
-function timeInput(value?: string | null) {
-  if (!value) return "";
+function timeInput(value?: string | null, timeZone?: string | null) {
+  const parts = zonedDateTimeParts(value, timeZone);
+  return parts ? `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}` : "";
+}
+
+function dateText(value?: string | null, timeZone?: string | null) {
+  if (!value) return "-";
   const date = new Date(value);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function dateText(value?: string | null) {
-  return value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(value)) : "-";
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: resolveTimeZone(timeZone) }).format(date);
 }
 
 function timeRange(lesson: RecordMap) {
-  return `${timeInput(lesson.scheduledStart)} - ${timeInput(lesson.scheduledEnd)}`;
+  return `${timeInput(lesson.scheduledStart, lesson.timeZone)} - ${timeInput(lesson.scheduledEnd, lesson.timeZone)}`;
+}
+
+function zonedDateTimeParts(value?: string | null, timeZone?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const values: Record<string, string> = {};
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: resolveTimeZone(timeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  for (const part of formatter.formatToParts(date)) {
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
+  }
+  return {
+    year: Number.parseInt(values.year, 10),
+    month: Number.parseInt(values.month, 10),
+    day: Number.parseInt(values.day, 10),
+    hour: Number.parseInt(values.hour, 10),
+    minute: Number.parseInt(values.minute, 10),
+  };
+}
+
+function resolveTimeZone(value?: string | null) {
+  const cleaned = String(value ?? "").trim() || defaultTimeZone;
+  const candidate = timeZoneAliases[cleaned] || inferTimeZone(cleaned);
+  try {
+    new Intl.DateTimeFormat("en-GB", { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return "UTC";
+  }
+}
+
+function inferTimeZone(value: string) {
+  const lowered = value.toLowerCase();
+  if (lowered.includes("united kingdom") || lowered.includes("gmt/bst") || lowered.includes("london")) {
+    return "Europe/London";
+  }
+  if (lowered.includes("nigeria") || lowered.includes("wat") || lowered.includes("lagos")) {
+    return "Africa/Lagos";
+  }
+  if (lowered === "other") {
+    return "UTC";
+  }
+  return value;
 }
 
 function names(items: RecordMap[] = []) {

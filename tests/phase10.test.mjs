@@ -5,6 +5,7 @@ import { rolePermissions } from "../server/roles.js";
 import { assertValidPassword } from "../server/security.js";
 import { buildSecurityChecklist } from "../server/securityHardening.js";
 import { buildReportRows, canParentAccessStudent, csvEscape, metricRowsToCsv, normaliseDateRange, percentage } from "../server/phase10Routes.js";
+import { __schedulingTestInternals } from "../server/schedulingRoutes.js";
 
 const repoFile = (path) => new URL(`../${path}`, import.meta.url);
 
@@ -76,6 +77,49 @@ test("scheduling conflict guards are present for tutors, students, and availabil
   assert.match(source, /student booking/);
   assert.match(source, /outside approved tutor availability/);
   assert.match(source, /End time must be after start time/);
+});
+
+test("portal shell links notifications and hides restricted tabs for limited roles", () => {
+  const source = readFileSync(repoFile("src/portal/PortalApp.tsx"), "utf8");
+  assert.match(source, /href="\/portal\/notifications"/);
+  assert.match(source, /visiblePortalModules/);
+  assert.match(source, /hideRestrictedModules/);
+  assert.match(source, /\["Tutor", "Parent", "Student"\]\.includes/);
+  assert.match(source, /portalModules\.filter\(\(module\) => canAccessModule\(user, module\)\)/);
+});
+
+test("scheduling warnings and availability checks use the selected UK time zone", async () => {
+  const { checkTutorAvailability, combineDateTime, dateTimeText } = __schedulingTestInternals;
+  const start = combineDateTime("2026-08-04", "18:00", "United Kingdom (GMT/BST)");
+  const end = combineDateTime("2026-08-04", "19:00", "United Kingdom (GMT/BST)");
+
+  assert.equal(start.toISOString(), "2026-08-04T17:00:00.000Z");
+  assert.match(dateTimeText(start, "United Kingdom (GMT/BST)"), /4 Aug 2026, 18:00/);
+
+  const prisma = {
+    tutorAvailabilityException: { findMany: async () => [] },
+    tutorAvailability: {
+      findMany: async () => [{ dayOfWeek: 2, startTime: "18:00", endTime: "19:00", timeZone: "United Kingdom (GMT/BST)" }],
+    },
+  };
+
+  assert.equal(await checkTutorAvailability(prisma, "tutor_1", start, end, "United Kingdom (GMT/BST)"), null);
+});
+
+test("weekly recurrence preserves wall-clock lesson time across UK clock changes", () => {
+  const { combineDateTime, dateTimeText, parseRecurrence } = __schedulingTestInternals;
+  const start = combineDateTime("2026-10-20", "18:00", "United Kingdom (GMT/BST)");
+  const end = combineDateTime("2026-10-20", "19:00", "United Kingdom (GMT/BST)");
+
+  const occurrences = parseRecurrence("WEEKLY", start, end, { occurrenceCount: "3" }, "United Kingdom (GMT/BST)");
+
+  assert.deepEqual(occurrences.map((occurrence) => dateTimeText(occurrence.start, "United Kingdom (GMT/BST)")), [
+    "20 Oct 2026, 18:00",
+    "27 Oct 2026, 18:00",
+    "3 Nov 2026, 18:00",
+  ]);
+  assert.equal(occurrences[0].start.toISOString(), "2026-10-20T17:00:00.000Z");
+  assert.equal(occurrences[2].start.toISOString(), "2026-11-03T18:00:00.000Z");
 });
 
 test("timesheet calculation rules use generated lesson rows and payable eligibility", () => {
