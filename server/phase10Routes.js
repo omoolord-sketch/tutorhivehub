@@ -79,7 +79,7 @@ export function registerPhase10Routes(app) {
           include: {
             tutor: { select: { id: true, fullName: true } },
             student: { select: { id: true, fullName: true } },
-            subject: { select: { id: true, name: true } },
+            subject: { select: { id: true, name: true, examPathway: true } },
           },
           take: 300,
         }),
@@ -586,7 +586,7 @@ async function reportLookups(prisma) {
     prisma.student.findMany({ orderBy: { fullName: "asc" }, select: studentSelect, take: 300 }),
     prisma.parent.findMany({ orderBy: { fullName: "asc" }, select: parentSelect, take: 300 }),
     prisma.tutor.findMany({ orderBy: { fullName: "asc" }, select: tutorSelect, take: 300 }),
-    prisma.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, examPathway: true, isActive: true }, take: 300 }),
+    prisma.subject.findMany({ orderBy: [{ name: "asc" }, { examPathway: "asc" }], select: { id: true, name: true, examPathway: true, isActive: true }, take: 300 }),
   ]);
   const examPathways = unique(students.map((student) => student.examPathway).concat(subjects.map((subject) => subject.examPathway)));
   return { students, parents, tutors, subjects, examPathways, reportStatuses };
@@ -689,8 +689,15 @@ function basicPdf(title, lines) {
 function safeLessonLookup(lesson) {
   return {
     id: lesson.id,
-    label: `${dateText(lesson.scheduledStart)} - ${lesson.student?.fullName || "Student"} - ${lesson.tutor?.fullName || "Tutor"} - ${lesson.subject?.name || "Subject"}`,
+    label: `${dateText(lesson.scheduledStart)} - ${lesson.student?.fullName || "Student"} - ${lesson.tutor?.fullName || "Tutor"} - ${subjectLabel(lesson.subject) || "Subject"}`,
   };
+}
+
+function subjectLabel(subject) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function observationInclude() {

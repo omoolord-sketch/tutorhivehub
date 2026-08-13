@@ -172,7 +172,7 @@ function ParentStudentView({ studentId }: { studentId: string }) {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <LessonList title="Timetable" lessons={studentView.timetable ?? []} />
-        <TutorList tutors={(studentView.assignedTutors ?? []).map((assignment: RecordMap) => ({ ...assignment.tutor, subjects: [assignment.subject?.name].filter(Boolean), students: [profile.fullName] }))} />
+        <TutorList tutors={(studentView.assignedTutors ?? []).map((assignment: RecordMap) => ({ ...assignment.tutor, subjects: [subjectLabel(assignment.subject)].filter(Boolean), students: [profile.fullName] }))} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -240,7 +240,7 @@ function StudentDashboard() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <LessonList title="Upcoming Timetable" lessons={dashboard.upcomingLessons ?? []} />
-        <TutorList tutors={(dashboard.assignedTutors ?? []).map((assignment: RecordMap) => ({ ...assignment.tutor, subjects: [assignment.subject?.name].filter(Boolean), students: [dashboard.student?.fullName] }))} />
+        <TutorList tutors={(dashboard.assignedTutors ?? []).map((assignment: RecordMap) => ({ ...assignment.tutor, subjects: [subjectLabel(assignment.subject)].filter(Boolean), students: [dashboard.student?.fullName] }))} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -316,7 +316,7 @@ function LessonList({ title, lessons }: { title: string; lessons: RecordMap[] })
             <article key={lesson.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-black text-navy">{lesson.subject?.name || "Lesson"}</h3>
+                  <h3 className="font-black text-navy">{subjectLabel(lesson.subject) || "Lesson"}</h3>
                   <p className="mt-1 text-sm font-bold text-slate-600">{dateTimeText(lesson.scheduledStart)} - {timeText(lesson.scheduledEnd)}</p>
                 </div>
                 <PortalBadge tone={lesson.joinAvailable ? "success" : "neutral"}>{lesson.joinAvailable ? "Join Available" : statusLabel(lesson.status)}</PortalBadge>
@@ -358,7 +358,7 @@ function LessonUpdates({ updates, title = "Parent-Friendly Lesson Updates" }: { 
         <article key={update.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="font-black text-navy">{update.topicCovered || update.subject?.name || "Lesson update"}</h3>
+              <h3 className="font-black text-navy">{update.topicCovered || subjectLabel(update.subject) || "Lesson update"}</h3>
               <p className="mt-1 text-xs font-bold text-slate-500">{update.student?.fullName} - {dateText(update.lessonDate)}</p>
             </div>
             <PortalBadge tone="neutral">{update.studentUnderstanding || "Update"}</PortalBadge>
@@ -389,7 +389,7 @@ function HomeworkList({ homework, summary }: { homework: RecordMap[]; summary?: 
             <PortalBadge tone={homeworkTone(item.status)}>{statusLabel(item.status)}</PortalBadge>
           </div>
           <p className="mt-2 text-sm leading-6 text-slate-650">{item.details}</p>
-          <p className="mt-3 text-xs font-bold text-slate-500">{item.subject?.name || "Subject"}{item.dueDate ? ` - Due ${dateText(item.dueDate)}` : ""}</p>
+          <p className="mt-3 text-xs font-bold text-slate-500">{subjectLabel(item.subject) || "Subject"}{item.dueDate ? ` - Due ${dateText(item.dueDate)}` : ""}</p>
         </article>
       ))}
     </PortalCard>
@@ -455,7 +455,7 @@ function ResourcesList({ resources }: { resources: RecordMap[] }) {
       {emptyOrList(resources, "Approved student resources will appear here.", (resource) => (
         <article key={resource.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 className="font-black text-navy">{resource.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-650">{resource.description || resource.subject?.name || "TutorHiveHub resource"}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-650">{resource.description || subjectLabel(resource.subject) || "TutorHiveHub resource"}</p>
           {resource.url && <a href={resource.url} className="mt-3 inline-block text-sm font-black text-navy underline">Open resource</a>}
         </article>
       ))}
@@ -508,7 +508,14 @@ function emptyOrList(items: RecordMap[] = [], message: string, render: (item: Re
 }
 
 function names(items: RecordMap[] = []) {
-  return items.map((item) => item?.name || item?.fullName).filter(Boolean).join(", ") || "-";
+  return items.map((item) => subjectLabel(item) || item?.fullName).filter(Boolean).join(", ") || "-";
+}
+
+function subjectLabel(subject?: RecordMap | null) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function statusLabel(value?: string | null) {

@@ -29,7 +29,7 @@ export function registerFamilyDashboardRoutes(app, { sendPortalEmail }) {
             where: { status: "ACTIVE" },
             include: {
               tutor: { select: { id: true, fullName: true, email: true, mainSubjectAreas: true } },
-              subject: { select: { id: true, name: true } },
+              subject: { select: { id: true, name: true, examPathway: true } },
             },
             orderBy: { startDate: "desc" },
           },
@@ -87,7 +87,7 @@ export function registerFamilyDashboardRoutes(app, { sendPortalEmail }) {
           tutorAssignments: {
             include: {
               tutor: { select: { id: true, fullName: true, email: true, mainSubjectAreas: true, qualifications: true } },
-              subject: { select: { id: true, name: true } },
+              subject: { select: { id: true, name: true, examPathway: true } },
             },
             orderBy: { startDate: "desc" },
           },
@@ -224,7 +224,7 @@ async function requireStudentProfile(prisma, request) {
         where: { status: "ACTIVE" },
         include: {
           tutor: { select: { id: true, fullName: true, email: true, mainSubjectAreas: true } },
-          subject: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true, examPathway: true } },
         },
         orderBy: { startDate: "desc" },
       },
@@ -265,7 +265,7 @@ async function lessonsForStudents(prisma, studentIds, options = {}) {
       students: { select: { id: true, fullName: true } },
       tutor: { select: { id: true, fullName: true, email: true } },
       replacementTutor: { select: { id: true, fullName: true, email: true } },
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, examPathway: true } },
     },
     orderBy: options.completed ? { scheduledStart: "desc" } : { scheduledStart: "asc" },
     take: options.take ?? 20,
@@ -319,7 +319,7 @@ async function reportsForStudents(prisma, studentIds, take) {
       lesson: {
         select: {
           scheduledStart: true,
-          subject: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true, examPathway: true } },
         },
       },
     },
@@ -357,7 +357,7 @@ async function homeworkForStudents(prisma, studentIds) {
     include: {
       student: { select: { id: true, fullName: true } },
       tutor: { select: { id: true, fullName: true } },
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, examPathway: true } },
       resources: { select: { id: true, title: true, resourceType: true, url: true, fileName: true } },
       submissions: {
         select: {
@@ -509,7 +509,7 @@ async function resourcesForStudent(prisma, student) {
       visibility: "STUDENTS",
       OR: [{ subjectId: null }, { subjectId: { in: subjectIds } }],
     },
-    include: { subject: { select: { id: true, name: true } } },
+    include: { subject: { select: { id: true, name: true, examPathway: true } } },
     orderBy: { createdAt: "desc" },
     take: 20,
   });
@@ -630,7 +630,8 @@ function assignedTutorSummary(children) {
       if (!tutor) continue;
       const existing = map.get(tutor.id) ?? { ...tutor, students: [], subjects: [] };
       existing.students.push(child.fullName);
-      if (assignment.subject?.name) existing.subjects.push(assignment.subject.name);
+      const subject = subjectLabel(assignment.subject);
+      if (subject) existing.subjects.push(subject);
       map.set(tutor.id, existing);
     }
   }
@@ -647,6 +648,13 @@ function subjectSummary(children) {
     }
   }
   return Array.from(map.values()).map((item) => ({ ...item, students: unique(item.students) }));
+}
+
+function subjectLabel(subject) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function safeParent(parent) {

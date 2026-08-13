@@ -180,7 +180,7 @@ function LessonTable({ lessons }: { lessons: RecordMap[] }) {
         </div>,
         names(lesson.students?.length ? lesson.students : [lesson.student]),
         lesson.replacementTutor ? `${lesson.replacementTutor.fullName} (replacement)` : lesson.tutor?.fullName || "-",
-        lesson.subject?.name || "-",
+        subjectLabel(lesson.subject) || "-",
         lesson.lessonType,
         <PortalBadge tone={lessonStatusTone(lesson.status)}>{lessonStatusLabel(lesson.status)}</PortalBadge>,
         <div className="flex flex-wrap gap-2">
@@ -324,7 +324,7 @@ function LessonProfile({ lessonId }: { lessonId: string }) {
   return (
     <div className="grid gap-6">
       <PortalCard
-        title={`${lesson.subject?.name ?? "Lesson"} - ${dateText(lesson.scheduledStart, lesson.timeZone)}`}
+        title={`${subjectLabel(lesson.subject) || "Lesson"} - ${dateText(lesson.scheduledStart, lesson.timeZone)}`}
         eyebrow="Lesson Profile"
         action={
           <div className="flex flex-wrap gap-2">
@@ -338,7 +338,7 @@ function LessonProfile({ lessonId }: { lessonId: string }) {
             items={[
               ["Students", names(lesson.students?.length ? lesson.students : [lesson.student])],
               ["Tutor", lesson.replacementTutor ? `${lesson.replacementTutor.fullName} (replacement)` : lesson.tutor?.fullName],
-              ["Subject", lesson.subject?.name],
+              ["Subject", subjectLabel(lesson.subject)],
               ["Lesson type", lesson.lessonType],
               ["Status", <PortalBadge tone={lessonStatusTone(lesson.status)}>{lessonStatusLabel(lesson.status)}</PortalBadge>],
               ["Time", `${dateText(lesson.scheduledStart, lesson.timeZone)} ${timeRange(lesson)}`],
@@ -520,7 +520,7 @@ function TimetableGrid({ lessons }: { lessons: RecordMap[] }) {
                   <p className="font-black text-navy">{timeRange(lesson)}</p>
                   <PortalBadge tone={lessonStatusTone(lesson.status)}>{lessonStatusLabel(lesson.status)}</PortalBadge>
                 </div>
-                <p className="text-sm font-bold text-slate-700">{lesson.subject?.name || "Subject"} - {lesson.lessonType}</p>
+                <p className="text-sm font-bold text-slate-700">{subjectLabel(lesson.subject) || "Subject"} - {lesson.lessonType}</p>
                 <p className="text-sm text-slate-650">{names(lesson.students?.length ? lesson.students : [lesson.student])}</p>
                 <p className="text-xs font-bold text-slate-500">{lesson.replacementTutor ? `${lesson.replacementTutor.fullName} (replacement)` : lesson.tutor?.fullName} - {lesson.timeZone || "No time zone"}</p>
               </a>
@@ -690,7 +690,7 @@ function LookupSelect({ id, label, records, required = false, defaultValue = "" 
       <option value="">Select an option</option>
       {records.map((record) => (
         <option key={record.id} value={record.id}>
-          {record.fullName || record.name}
+          {lookupLabel(record)}
         </option>
       ))}
     </PortalSelect>
@@ -703,7 +703,7 @@ function MultiSelect({ id, label, options, defaultValues = [] }: { id: string; l
       <label htmlFor={id} className="text-sm font-bold text-navy">{label}</label>
       <select id={id} name={id} multiple required defaultValue={defaultValues} className="mt-2 min-h-36 w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-sm text-ink shadow-sm outline-none transition focus:border-gold focus:ring-4 focus:ring-gold/20">
         {options.map((option) => (
-          <option key={option.id} value={option.id}>{option.fullName || option.name}</option>
+          <option key={option.id} value={option.id}>{lookupLabel(option)}</option>
         ))}
       </select>
       <p className="mt-1 text-xs font-bold text-slate-500">Hold Ctrl or Cmd to select multiple students for group lessons.</p>
@@ -721,6 +721,17 @@ function selectedValues(form: HTMLFormElement, name: string) {
   const field = form.elements.namedItem(name) as HTMLSelectElement | null;
   if (!field) return [];
   return Array.from(field.selectedOptions).map((option) => option.value).filter(Boolean);
+}
+
+function lookupLabel(record: RecordMap) {
+  if (record.name && record.examPathway) {
+    return `${record.name} - ${record.examPathway}`;
+  }
+  return record.fullName || record.name || "";
+}
+
+function subjectLabel(subject?: RecordMap | null) {
+  return lookupLabel(subject ?? {});
 }
 
 function DetailGrid({ items }: { items: Array<[string, ReactNode]> }) {

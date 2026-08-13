@@ -49,7 +49,7 @@ export function registerFinanceRoutes(app, { sendPortalEmail } = {}) {
           select: { id: true, fullName: true, parentId: true, yearGroup: true, status: true },
         }),
         prisma.subject.findMany({
-          orderBy: { name: "asc" },
+          orderBy: [{ name: "asc" }, { examPathway: "asc" }],
           select: { id: true, name: true, category: true, examPathway: true, isActive: true },
         }),
         prisma.feePlan.findMany({ where: { status: "ACTIVE" }, include: feePlanInclude, orderBy: { name: "asc" } }),

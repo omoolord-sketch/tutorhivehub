@@ -52,7 +52,7 @@ const lessonInclude = {
   },
   tutor: { include: { user: { select: { id: true, email: true, name: true } } } },
   replacementTutor: { include: { user: { select: { id: true, email: true, name: true } } } },
-  subject: { select: { id: true, name: true } },
+  subject: { select: { id: true, name: true, examPathway: true } },
   parent: {
     include: {
       user: { select: { id: true, email: true, name: true } },
@@ -74,7 +74,7 @@ export function registerSchedulingRoutes(app, { sendPortalEmail }) {
       const [students, tutors, subjects] = await Promise.all([
         prisma.student.findMany({ where: await scopedStudentLookupWhere(prisma, request), orderBy: { fullName: "asc" }, select: { id: true, fullName: true, yearGroup: true, parentId: true } }),
         prisma.tutor.findMany({ where: await scopedTutorLookupWhere(prisma, request), orderBy: { fullName: "asc" }, select: { id: true, fullName: true, email: true, timeZone: true } }),
-        prisma.subject.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, examPathway: true } }),
+        prisma.subject.findMany({ where: { isActive: true }, orderBy: [{ name: "asc" }, { examPathway: "asc" }], select: { id: true, name: true, examPathway: true } }),
       ]);
       response.json({ ok: true, students, tutors, subjects, lessonTypes, lessonStatuses, availabilityStatuses, availabilityExceptionTypes, scope });
     } catch (error) {
@@ -620,7 +620,14 @@ function notificationTitle(eventType) {
 function notificationMessage(lesson, eventType) {
   const students = (lesson.students?.length ? lesson.students : [lesson.student]).map((student) => student?.fullName).filter(Boolean).join(", ");
   const tutorName = lesson.replacementTutor?.fullName ? `${lesson.replacementTutor.fullName} (replacement tutor)` : lesson.tutor?.fullName;
-  return `${notificationTitle(eventType)}: ${lesson.subject?.name ?? "Lesson"} with ${tutorName ?? "TutorHiveHub"} for ${students || "student"} on ${dateTimeText(lesson.scheduledStart, lesson.timeZone)} (${lesson.timeZone || "time zone not set"}).`;
+  return `${notificationTitle(eventType)}: ${subjectLabel(lesson.subject) || "Lesson"} with ${tutorName ?? "TutorHiveHub"} for ${students || "student"} on ${dateTimeText(lesson.scheduledStart, lesson.timeZone)} (${lesson.timeZone || "time zone not set"}).`;
+}
+
+function subjectLabel(subject) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 async function lessonScopeWhere(prisma, request) {

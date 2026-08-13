@@ -235,7 +235,7 @@ function HomeworkCreateForm({
         <option value="">Select subject</option>
         {(lookups.subjects ?? []).map((subject) => (
           <option key={subject.id} value={subject.id}>
-            {subject.name}
+            {subjectLabel(subject)}
           </option>
         ))}
       </PortalSelect>
@@ -340,7 +340,7 @@ function HomeworkCard({
         <div>
           <h3 className="text-lg font-black text-navy">{item.title}</h3>
           <p className="mt-1 text-sm font-bold text-slate-600">
-            {item.student?.fullName || "Student"} {item.subject?.name ? `- ${item.subject.name}` : ""}
+            {item.student?.fullName || "Student"} {subjectLabel(item.subject) ? `- ${subjectLabel(item.subject)}` : ""}
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-650">{item.instructions || item.details}</p>
         </div>
@@ -519,7 +519,7 @@ export function ResourcesRoute({ currentUser }: { currentUser: PortalUser }) {
               <option value="">All subjects</option>
               {(lookups.subjects ?? []).map((subject) => (
                 <option key={subject.id} value={subject.id}>
-                  {subject.name}
+                  {subjectLabel(subject)}
                 </option>
               ))}
             </PortalSelect>
@@ -580,7 +580,7 @@ function ResourceList({ resources }: { resources: RecordMap[] }) {
       <p className="mt-1 text-xs font-bold text-slate-500">{resource.description || "No description"}</p>
     </div>,
     statusLabel(resource.resourceType),
-    resource.subject?.name || "All",
+    subjectLabel(resource.subject) || "All",
     <PortalBadge tone={resource.status === "ACTIVE" ? "success" : "warning"}>{statusLabel(resource.status)}</PortalBadge>,
     <div className="flex flex-wrap gap-2">
       {resource.hasFile && <DownloadLink href={`/api/portal/resources/${resource.id}/download`} label="Download" />}
@@ -693,7 +693,7 @@ export function ProgressRoute({ currentUser }: { currentUser: PortalUser }) {
               <option value="">Select subject</option>
               {(lookups.subjects ?? []).map((subject) => (
                 <option key={subject.id} value={subject.id}>
-                  {subject.name}
+                  {subjectLabel(subject)}
                 </option>
               ))}
             </PortalSelect>
@@ -730,7 +730,7 @@ export function ProgressRoute({ currentUser }: { currentUser: PortalUser }) {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="font-black text-navy">{record.student?.fullName || "Student"}</h3>
-                    <p className="mt-1 text-sm font-bold text-slate-600">{record.subject?.name || "General progress"} - {dateText(record.reviewDate)}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-600">{subjectLabel(record.subject) || "General progress"} - {dateText(record.reviewDate)}</p>
                   </div>
                   <PortalBadge tone={progressTone(record.goalStatus)}>{statusLabel(record.goalStatus)}</PortalBadge>
                 </div>
@@ -956,6 +956,13 @@ function statusLabel(value?: string | null) {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function subjectLabel(subject?: RecordMap | null) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function dateText(value?: string | Date | null) {

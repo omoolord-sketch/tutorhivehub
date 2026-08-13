@@ -54,7 +54,7 @@ const homeworkInclude = {
   lesson: { select: { id: true, lessonType: true, scheduledStart: true, scheduledEnd: true } },
   resources: {
     include: {
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, examPathway: true } },
       tutor: { select: { id: true, fullName: true } },
       student: { select: { id: true, fullName: true } },
     },
@@ -92,7 +92,7 @@ export function registerLearningRoutes(app, upload, { sendPortalEmail } = {}) {
       const [students, tutors, subjects, lessons, resources] = await Promise.all([
         prisma.student.findMany({ where: await studentScopeWhere(prisma, request), orderBy: { fullName: "asc" }, select: { id: true, fullName: true, parentId: true, yearGroup: true, examPathway: true, status: true } }),
         prisma.tutor.findMany({ where: await tutorScopeWhere(prisma, request), orderBy: { fullName: "asc" }, select: { id: true, fullName: true, email: true, status: true } }),
-        prisma.subject.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, examPathway: true, category: true } }),
+        prisma.subject.findMany({ where: { isActive: true }, orderBy: [{ name: "asc" }, { examPathway: "asc" }], select: { id: true, name: true, examPathway: true, category: true } }),
         prisma.lesson.findMany({ where: await lessonLookupWhere(prisma, request), orderBy: { scheduledStart: "desc" }, take: 100, select: { id: true, studentId: true, tutorId: true, subjectId: true, lessonType: true, scheduledStart: true, status: true } }),
         prisma.resource.findMany({ where: await resourceScopeWhere(prisma, request), include: resourceInclude, orderBy: { title: "asc" }, take: 200 }),
       ]);

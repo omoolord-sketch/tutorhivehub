@@ -32,7 +32,7 @@ const studentInclude = {
   tutorAssignments: {
     include: {
       tutor: { select: { id: true, fullName: true, email: true } },
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, examPathway: true } },
     },
     orderBy: { startDate: "desc" },
   },
@@ -44,7 +44,7 @@ const tutorInclude = {
   studentAssignments: {
     include: {
       student: { select: { id: true, fullName: true, yearGroup: true } },
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, examPathway: true } },
     },
     orderBy: { startDate: "desc" },
   },
@@ -74,7 +74,7 @@ export function registerMasterDataRoutes(app, upload) {
         prisma.parent.findMany({ orderBy: { fullName: "asc" }, select: { id: true, fullName: true, email: true, status: true } }),
         prisma.student.findMany({ orderBy: { fullName: "asc" }, select: { id: true, fullName: true, yearGroup: true, status: true } }),
         prisma.tutor.findMany({ orderBy: { fullName: "asc" }, select: { id: true, fullName: true, email: true, status: true } }),
-        prisma.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, category: true, examPathway: true, isActive: true } }),
+        prisma.subject.findMany({ orderBy: [{ name: "asc" }, { examPathway: "asc" }], select: { id: true, name: true, category: true, examPathway: true, isActive: true } }),
         prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true, status: true, role: { select: { name: true } } } }),
       ]);
       response.json({ ok: true, parents, students, tutors, subjects, users, examPathways });
@@ -249,7 +249,7 @@ export function registerMasterDataRoutes(app, upload) {
       const subjects = await getPrisma().subject.findMany({
         where: buildSubjectWhere(request.query),
         include: subjectInclude,
-        orderBy: { name: "asc" },
+        orderBy: [{ name: "asc" }, { examPathway: "asc" }],
         take: 200,
       });
       response.json({ ok: true, subjects });
@@ -269,7 +269,9 @@ export function registerMasterDataRoutes(app, upload) {
 
   app.post("/api/portal/subjects", requireSession("subjects:manage"), async (request, response, next) => {
     try {
-      const subject = await getPrisma().subject.create({ data: parseSubjectInput(request.body), include: subjectInclude });
+      const data = parseSubjectInput(request.body);
+      await assertUniqueSubjectPathway(data);
+      const subject = await getPrisma().subject.create({ data, include: subjectInclude });
       await auditLog({ request, actorId: request.portalUser.id, action: "subject_created", entityType: "Subject", entityId: subject.id });
       response.status(201).json({ ok: true, subject });
     } catch (error) {
@@ -279,7 +281,9 @@ export function registerMasterDataRoutes(app, upload) {
 
   app.patch("/api/portal/subjects/:id", requireSession("subjects:manage"), async (request, response, next) => {
     try {
-      const subject = await getPrisma().subject.update({ where: { id: request.params.id }, data: parseSubjectInput(request.body), include: subjectInclude });
+      const data = parseSubjectInput(request.body);
+      await assertUniqueSubjectPathway(data, request.params.id);
+      const subject = await getPrisma().subject.update({ where: { id: request.params.id }, data, include: subjectInclude });
       await auditLog({ request, actorId: request.portalUser.id, action: "subject_updated", entityType: "Subject", entityId: subject.id });
       response.json({ ok: true, subject });
     } catch (error) {
@@ -473,10 +477,25 @@ function parseSubjectInput(body) {
   return cleanData({
     name: required(body.name, "Subject name is required."),
     category: optional(body.category),
-    examPathway: parseExamPathway(body.examPathway),
+    examPathway: requiredExamPathway(body.examPathway),
     isActive: optionalBoolean(body.isActive) ?? true,
     description: optional(body.description),
   });
+}
+
+async function assertUniqueSubjectPathway(data, currentSubjectId = null) {
+  const existing = await getPrisma().subject.findFirst({
+    where: {
+      name: data.name,
+      examPathway: data.examPathway,
+      ...(currentSubjectId ? { id: { not: currentSubjectId } } : {}),
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    throw new ConflictError("A subject with this name and exam pathway already exists. Use a different pathway or edit the existing subject.");
+  }
 }
 
 function parseAssignmentInput(body) {
@@ -594,6 +613,14 @@ function parseExamPathway(value) {
   if (!pathway) {
     return null;
   }
+  if (!examPathways.includes(pathway)) {
+    throw new ValidationError("Please select a valid exam pathway.");
+  }
+  return pathway;
+}
+
+function requiredExamPathway(value) {
+  const pathway = required(value, "Subject exam pathway is required.");
   if (!examPathways.includes(pathway)) {
     throw new ValidationError("Please select a valid exam pathway.");
   }

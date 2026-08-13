@@ -153,15 +153,43 @@ test("weekly recurrence preserves wall-clock lesson time across UK clock changes
 
 test("timesheet calculation rules use generated lesson rows and payable eligibility", () => {
   const source = readFileSync(repoFile("server/payrollRoutes.js"), "utf8");
+  const schema = readFileSync(repoFile("prisma/schema.prisma"), "utf8");
+  const payrollPage = readFileSync(repoFile("src/portal/payroll-pages.tsx"), "utf8");
   assert.match(source, /generateTimesheet/);
   assert.match(source, /reportStatus: "SUBMITTED"/);
   assert.match(source, /report: \{ isNot: null \}/);
   assert.match(source, /Completed and verified lesson/);
   assert.match(source, /Lessons without submitted daily reports are excluded from generated timesheets/);
   assert.match(source, /Tutors cannot approve or pay their own timesheets/);
+  assert.match(source, /const defaultPayrollCurrency = "NGN"/);
+  assert.match(source, /currency: applicableRate\?\.currency \|\| defaultPayrollCurrency/);
+  assert.match(source, /Currency must use a three-letter code such as NGN/);
+  assert.match(payrollPage, /const defaultPayrollCurrency = "NGN"/);
+  assert.match(schema, /model TutorRate \{[\s\S]*currency\s+String\s+@default\("NGN"\)/);
+  assert.match(schema, /model TimesheetEntry \{[\s\S]*currency\s+String\s+@default\("NGN"\)/);
+  assert.match(schema, /model TimesheetAdjustment \{[\s\S]*currency\s+String\s+@default\("NGN"\)/);
 
   const amount = Math.round((2.5 * 18 + Number.EPSILON) * 100) / 100;
   assert.equal(amount, 45);
+});
+
+test("subjects can repeat by name when exam pathways differ", () => {
+  const schema = readFileSync(repoFile("prisma/schema.prisma"), "utf8");
+  const serverSource = readFileSync(repoFile("server/masterDataRoutes.js"), "utf8");
+  const portalSource = readFileSync(repoFile("src/portal/master-data-pages.tsx"), "utf8");
+  const migration = readFileSync(repoFile("prisma/migrations/20260813090000_subject_pathway_and_ngn_payroll/migration.sql"), "utf8");
+  const subjectModel = schema.match(/model Subject \{[\s\S]*?\n\}/)?.[0] || "";
+
+  assert.doesNotMatch(subjectModel, /name\s+String\s+@unique/);
+  assert.match(subjectModel, /examPathway\s+String/);
+  assert.match(subjectModel, /@@unique\(\[name, examPathway\]\)/);
+  assert.match(serverSource, /Subject exam pathway is required/);
+  assert.match(serverSource, /assertUniqueSubjectPathway/);
+  assert.match(serverSource, /name: data\.name,\s+examPathway: data\.examPathway/);
+  assert.match(portalSource, /label="Exam pathway" options=\{examPathways\} required/);
+  assert.match(portalSource, /function subjectLabel/);
+  assert.match(migration, /DROP INDEX `Subject_name_key`/);
+  assert.match(migration, /CREATE UNIQUE INDEX `Subject_name_examPathway_key`/);
 });
 
 test("master data forms link parent and tutor profiles to portal user accounts", () => {

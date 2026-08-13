@@ -160,7 +160,7 @@ function ReportFilters({ lookups, onSubmit }: { lookups: RecordMap; onSubmit: (f
       </PortalSelect>
       <PortalSelect id="subjectId" label="Subject">
         <option value="">All subjects</option>
-        {(lookups.subjects ?? []).map((subject: RecordMap) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+        {(lookups.subjects ?? []).map((subject: RecordMap) => <option key={subject.id} value={subject.id}>{subjectLabel(subject)}</option>)}
       </PortalSelect>
       <PortalSelect id="examPathway" label="Exam pathway">
         <option value="">All pathways</option>
@@ -682,6 +682,13 @@ function statusLabel(value?: string | null) {
     .replace(/_/g, " ")
     .trim()
     .replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+
+function subjectLabel(subject?: RecordMap | null) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function dateText(value?: string | null) {

@@ -38,6 +38,7 @@ const tutorFlagTypes = [
   ["INCORRECT_RATE", "Incorrect rate"],
   ["OTHER", "Other"],
 ];
+const defaultPayrollCurrency = "NGN";
 
 export function PayrollRoute({ routePath, currentUser }: { routePath: string; currentUser: PortalUser }) {
   const match = routePath.match(/^\/portal\/timesheets\/([^/]+)$/);
@@ -233,7 +234,7 @@ function TutorRateManager({ lookups, rates, onSubmit }: { lookups: RecordMap; ra
           <LookupSelect id="tutorId" label="Tutor" records={lookups.tutors ?? []} required />
           <RateTypeSelect id="rateType" label="Rate type" rateTypes={lookups.rateTypes ?? []} required />
           <PortalInput id="amount" label="Amount" type="number" step="0.01" min="0" required />
-          <PortalInput id="currency" label="Currency" maxLength={3} required defaultValue="GBP" />
+          <PortalInput id="currency" label="Currency" maxLength={3} required defaultValue={defaultPayrollCurrency} />
           <PortalInput id="effectiveDate" label="Effective date" type="date" required defaultValue={dateInput(new Date())} />
           <PortalInput id="endDate" label="End date" type="date" />
           <PortalTextarea id="notes" label="Notes" className="md:col-span-2" />
@@ -548,7 +549,7 @@ function AdminAdjustmentPanel({ timesheet, onSubmit }: { timesheet: RecordMap; o
     <PortalCard title="Authorised Adjustment" eyebrow="Manual Finance Control">
       <form className="grid gap-4 md:grid-cols-3" onSubmit={(event) => { event.preventDefault(); onSubmit(event.currentTarget); }}>
         <PortalInput id="amount" label="Adjustment amount" type="number" step="0.01" required disabled={timesheet.status === "PAID"} />
-        <PortalInput id="currency" label="Currency" maxLength={3} required defaultValue="GBP" disabled={timesheet.status === "PAID"} />
+        <PortalInput id="currency" label="Currency" maxLength={3} required defaultValue={defaultPayrollCurrency} disabled={timesheet.status === "PAID"} />
         <PortalTextarea id="reason" label="Reason" required className="md:col-span-3" disabled={timesheet.status === "PAID"} />
         <div className="md:col-span-3">
           <PortalButton type="submit" disabled={timesheet.status === "PAID"}>Add Authorised Adjustment</PortalButton>
@@ -636,7 +637,7 @@ function statusLabel(value?: string | null) {
   return String(value || "-").replace(/_/g, " ");
 }
 
-function money(value: unknown, currency = "GBP") {
+function money(value: unknown, currency = defaultPayrollCurrency) {
   const number = Number(value ?? 0);
   const amount = Number.isFinite(number) ? number.toFixed(2) : "0.00";
   return currency ? `${currency} ${amount}` : amount;

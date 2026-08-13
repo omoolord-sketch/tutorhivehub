@@ -16,6 +16,7 @@ const reviewStatuses = ["UNDER_REVIEW", "RETURNED", "APPROVED", "PAID", "REJECTE
 const payableLessonStatuses = ["COMPLETED"];
 const generatedTimesheetStatuses = ["DRAFT", "RETURNED"];
 const tutorFlagTypes = ["MISSING_LESSON", "INCORRECT_DURATION", "INCORRECT_RATE", "OTHER"];
+const defaultPayrollCurrency = "NGN";
 
 const timesheetListInclude = {
   tutor: { select: { id: true, fullName: true, email: true, userId: true } },
@@ -36,7 +37,7 @@ const timesheetDetailInclude = {
         include: {
           student: { select: { id: true, fullName: true } },
           students: { select: { id: true, fullName: true } },
-          subject: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true, examPathway: true } },
           report: { select: { id: true, submittedAt: true } },
         },
       },
@@ -232,7 +233,7 @@ export function registerPayrollRoutes(app, { sendPortalEmail } = {}) {
         data: {
           timesheetId: timesheet.id,
           amount,
-          currency: parseCurrency(request.body?.currency || "GBP"),
+          currency: parseCurrency(request.body?.currency || defaultPayrollCurrency),
           reason,
           approvedById: request.portalUser.id,
         },
@@ -329,7 +330,7 @@ async function generateTimesheet({ prisma, request, tutorId, month, year }) {
       include: {
         student: { select: { id: true, fullName: true } },
         students: { select: { id: true, fullName: true } },
-        subject: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true, examPathway: true } },
         report: { select: { id: true } },
       },
       orderBy: { scheduledStart: "asc" },
@@ -374,13 +375,13 @@ function buildEntryFromLesson(lesson, rates) {
     date: startOfDay(lesson.scheduledStart),
     lessonTime: `${timeText(lesson.scheduledStart)}-${timeText(lesson.scheduledEnd)}`,
     studentName: lessonStudentNames(lesson),
-    subject: lesson.subject?.name || "Subject not recorded",
+    subject: subjectLabel(lesson.subject) || "Subject not recorded",
     lessonType: lesson.lessonType,
     durationMinutes,
     hoursTaught: hours,
     rateType,
     rate: rateAmount,
-    currency: applicableRate?.currency || "GBP",
+    currency: applicableRate?.currency || defaultPayrollCurrency,
     amountDue,
     attendanceStatus: attendanceSummary(lesson),
     reportStatus: lesson.report ? "SUBMITTED" : lesson.reportStatus || "NOT_DUE",
@@ -554,7 +555,7 @@ function parseTutorRateInput(body, approvedById) {
     tutorId: required(body?.tutorId, "Tutor is required."),
     rateType,
     amount: parseMoney(body?.amount, "Rate amount is required."),
-    currency: parseCurrency(body?.currency || "GBP"),
+    currency: parseCurrency(body?.currency || defaultPayrollCurrency),
     effectiveDate,
     endDate,
     approvedById,
@@ -605,11 +606,19 @@ function lessonStudentNames(lesson) {
   return students.map((student) => student?.fullName).filter(Boolean).join(", ") || "Student not recorded";
 }
 
+function subjectLabel(subject) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
+}
+
 function attendanceSummary(lesson) {
   return [`Tutor: ${lesson.tutorAttendance || "Not Recorded"}`, `Student: ${lesson.studentAttendance || "Not Recorded"}`].join("; ");
 }
 
 function buildPaymentStatement(timesheet) {
+  const currency = timesheetCurrency(timesheet);
   const lines = [
     "TutorHiveHub Monthly Timesheet Statement",
     "",
@@ -622,11 +631,11 @@ function buildPaymentStatement(timesheet) {
     `Total students taught: ${timesheet.totalStudents}`,
     `Total subjects taught: ${timesheet.totalSubjects}`,
     `Total hours: ${moneyText(timesheet.totalHours)}`,
-    `Standard tutoring total: ${moneyText(timesheet.standardTutoringTotal)}`,
-    `Shadow-session total: ${moneyText(timesheet.shadowSessionTotal)}`,
-    `NVQ-support total: ${moneyText(timesheet.nvqSupportTotal)}`,
-    `Adjustments: ${moneyText(timesheet.adjustmentsTotal)}`,
-    `Final amount payable: ${moneyText(timesheet.finalAmountPayable)}`,
+    `Standard tutoring total: ${moneyText(timesheet.standardTutoringTotal)} ${currency}`,
+    `Shadow-session total: ${moneyText(timesheet.shadowSessionTotal)} ${currency}`,
+    `NVQ-support total: ${moneyText(timesheet.nvqSupportTotal)} ${currency}`,
+    `Adjustments: ${moneyText(timesheet.adjustmentsTotal)} ${currency}`,
+    `Final amount payable: ${moneyText(timesheet.finalAmountPayable)} ${currency}`,
     "",
     "Lesson Rows",
   ];
@@ -697,6 +706,10 @@ function moneyText(value) {
   return decimalNumber(value).toFixed(2);
 }
 
+function timesheetCurrency(timesheet) {
+  return timesheet.entries?.find((entry) => entry.currency)?.currency || timesheet.adjustments?.find((adjustment) => adjustment.currency)?.currency || defaultPayrollCurrency;
+}
+
 function parseMoney(value, message) {
   const cleaned = required(value, message);
   const number = Number(cleaned);
@@ -709,7 +722,7 @@ function parseMoney(value, message) {
 function parseCurrency(value) {
   const cleaned = required(value, "Currency is required.").toUpperCase();
   if (!/^[A-Z]{3}$/.test(cleaned)) {
-    throw new ValidationError("Currency must use a three-letter code such as GBP.");
+    throw new ValidationError("Currency must use a three-letter code such as NGN.");
   }
   return cleaned;
 }

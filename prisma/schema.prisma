@@ -385,7 +385,7 @@ model TutorRate {
   tutor           Tutor     @relation(fields: [tutorId], references: [id])
   rateType        String
   amount          Decimal   @db.Decimal(10, 2)
-  currency        String    @default("GBP")
+  currency        String    @default("NGN")
   effectiveDate   DateTime
   endDate         DateTime?
   approvedById    String?
@@ -404,9 +404,9 @@ model TutorRate {
 
 model Subject {
   id          String      @id @default(cuid())
-  name        String      @unique
+  name        String
   category    String?
-  examPathway String?
+  examPathway String
   isActive    Boolean     @default(true)
   description String?     @db.Text
   students    Student[]
@@ -423,6 +423,7 @@ model Subject {
   @@index([category])
   @@index([examPathway])
   @@index([isActive])
+  @@unique([name, examPathway])
 }
 
 model StudentTutorAssignment {
@@ -654,7 +655,7 @@ model TimesheetEntry {
   hoursTaught              Decimal    @db.Decimal(6, 2)
   rateType                 String?
   rate                     Decimal    @db.Decimal(10, 2)
-  currency                 String     @default("GBP")
+  currency                 String     @default("NGN")
   amountDue                Decimal    @db.Decimal(10, 2)
   attendanceStatus         String?
   reportStatus             String?
@@ -680,7 +681,7 @@ model TimesheetAdjustment {
   timesheetId   String
   timesheet     Timesheet  @relation(fields: [timesheetId], references: [id])
   amount        Decimal    @db.Decimal(10, 2)
-  currency      String     @default("GBP")
+  currency      String     @default("NGN")
   reason        String     @db.Text
   approvedById  String
   approvedBy    User       @relation("TimesheetAdjustmentApprovedBy", fields: [approvedById], references: [id])

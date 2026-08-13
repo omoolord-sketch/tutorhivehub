@@ -14,7 +14,7 @@ const lessonWorkspaceInclude = {
   students: { select: { id: true, fullName: true, academicGoals: true, parentId: true } },
   tutor: { include: { user: { select: { id: true, email: true, name: true } } } },
   replacementTutor: { include: { user: { select: { id: true, email: true, name: true } } } },
-  subject: { select: { id: true, name: true } },
+  subject: { select: { id: true, name: true, examPathway: true } },
   report: true,
   homework: { orderBy: { dueDate: "asc" } },
 };
@@ -22,7 +22,7 @@ const lessonWorkspaceInclude = {
 const reportInclude = {
   lesson: {
     include: {
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, examPathway: true } },
       student: { select: { id: true, fullName: true, parentId: true } },
       students: { select: { id: true, fullName: true, parentId: true } },
       tutor: { select: { id: true, fullName: true, email: true, userId: true } },
@@ -428,7 +428,7 @@ async function createSafeguardingConcern({ prisma, request, lesson, report, body
   });
 
   const title = "URGENT SAFEGUARDING CONCERN - TutorHiveHub";
-  const message = `A safeguarding concern was submitted for ${report.student?.fullName ?? "a student"} after ${lesson.subject?.name ?? "a lesson"} on ${dateText(lesson.scheduledStart)}. Restricted details are stored in the portal.`;
+  const message = `A safeguarding concern was submitted for ${report.student?.fullName ?? "a student"} after ${subjectLabel(lesson.subject) || "a lesson"} on ${dateText(lesson.scheduledStart)}. Restricted details are stored in the portal.`;
   for (const admin of admins) {
     await prisma.notification.create({
       data: {
@@ -474,7 +474,7 @@ async function studentTimeline(prisma, studentId, request) {
     id: report.id,
     lessonDate: report.lesson.scheduledStart,
     tutor: report.tutor?.fullName,
-    subject: report.lesson.subject?.name,
+    subject: subjectLabel(report.lesson.subject),
     topic: report.topicCovered,
     attendance: [report.lesson.studentAttendance, report.lesson.minutesLate ? `${report.lesson.minutesLate} minutes late` : null].filter(Boolean).join(" - "),
     summary: report.lessonSummary,
@@ -606,6 +606,13 @@ function startOfDay(date) {
 
 function dateText(value) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function subjectLabel(subject) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function escapeHtml(value) {

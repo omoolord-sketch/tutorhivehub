@@ -595,7 +595,7 @@ function LookupSelect({ id, label, records, required = false }: { id: string; la
       <option value="">Select an option</option>
       {records.map((record) => (
         <option key={record.id} value={record.id}>
-          {record.fullName || record.name} {record.email ? `- ${record.email}` : ""}
+          {lookupLabel(record)} {record.email ? `- ${record.email}` : ""}
         </option>
       ))}
     </PortalSelect>
@@ -648,6 +648,13 @@ function formPayload(form: HTMLFormElement) {
     }
   }
   return payload;
+}
+
+function lookupLabel(record: RecordMap) {
+  if (record.name && record.examPathway) {
+    return `${record.name} - ${record.examPathway}`;
+  }
+  return record.fullName || record.name || "";
 }
 
 function invoiceTone(status: string): "success" | "warning" | "danger" | "neutral" {

@@ -110,7 +110,7 @@ function LessonSummaryCard({ lesson, reportMode = false, canSetAssignments = fal
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-black text-navy">{names(lesson.students?.length ? lesson.students : [lesson.student])}</p>
-          <p className="mt-1 text-xs font-bold text-slate-500">{lesson.subject?.name || "Subject"} - {dateText(lesson.scheduledStart)} {timeRange(lesson)}</p>
+          <p className="mt-1 text-xs font-bold text-slate-500">{subjectLabel(lesson.subject) || "Subject"} - {dateText(lesson.scheduledStart)} {timeRange(lesson)}</p>
         </div>
         <PortalBadge tone={lesson.reportOutstanding || reportMode ? "warning" : statusTone(lesson.status)}>{lesson.reportOutstanding || reportMode ? "Report Outstanding" : labelStatus(lesson.status)}</PortalBadge>
       </div>
@@ -197,7 +197,7 @@ function LessonWorkspacePage({ lessonId, currentUser }: { lessonId: string; curr
   return (
     <div className="grid gap-6">
       <PortalCard
-        title={`${lesson.subject?.name ?? "Lesson"} Workspace`}
+        title={`${subjectLabel(lesson.subject) || "Lesson"} Workspace`}
         eyebrow="Lesson Delivery"
         action={
           <div className="flex flex-wrap gap-2">
@@ -395,7 +395,7 @@ function LessonTableForReports({ lessons }: { lessons: RecordMap[] }) {
       rows={lessons.map((lesson) => [
         <div>
           <p className="font-black text-navy">{names(lesson.students?.length ? lesson.students : [lesson.student])}</p>
-          <p className="text-xs font-bold text-slate-500">{lesson.subject?.name} - {dateText(lesson.scheduledStart)}</p>
+          <p className="text-xs font-bold text-slate-500">{subjectLabel(lesson.subject)} - {dateText(lesson.scheduledStart)}</p>
         </div>,
         lesson.replacementTutor ? `${lesson.replacementTutor.fullName} (replacement)` : lesson.tutor?.fullName || "-",
         [lesson.studentAttendance, lesson.minutesLate ? `${lesson.minutesLate} minutes late` : null].filter(Boolean).join(" - ") || "-",
@@ -413,7 +413,7 @@ function ReportTable({ reports }: { reports: RecordMap[] }) {
       rows={reports.map((report) => [
         <div>
           <p className="font-black text-navy">{report.student?.fullName || report.lesson?.student?.fullName}</p>
-          <p className="text-xs font-bold text-slate-500">{report.lesson?.subject?.name} - {report.topicCovered}</p>
+          <p className="text-xs font-bold text-slate-500">{subjectLabel(report.lesson?.subject)} - {report.topicCovered}</p>
         </div>,
         report.tutor?.fullName || report.lesson?.tutor?.fullName || "-",
         report.studentUnderstanding,
@@ -468,7 +468,7 @@ function ReportProfile({ reportId }: { reportId: string }) {
         items={[
           ["Student", report.student?.fullName || report.lesson?.student?.fullName],
           ["Tutor", report.tutor?.fullName],
-          ["Subject", report.lesson?.subject?.name],
+          ["Subject", subjectLabel(report.lesson?.subject)],
           ["Topic", report.topicCovered],
           ["Understanding", report.studentUnderstanding],
           ["Engagement", report.studentParticipation],
@@ -534,7 +534,7 @@ function reportExportText(report: RecordMap) {
     "TutorHiveHub Daily Lesson Report",
     `Student: ${report.student?.fullName || report.lesson?.student?.fullName || "-"}`,
     `Tutor: ${report.tutor?.fullName || "-"}`,
-    `Subject: ${report.lesson?.subject?.name || "-"}`,
+    `Subject: ${subjectLabel(report.lesson?.subject) || "-"}`,
     `Date: ${dateText(report.lesson?.scheduledStart)}`,
     `Topic: ${report.topicCovered || "-"}`,
     `Summary: ${report.lessonSummary || "-"}`,
@@ -577,6 +577,13 @@ function assignmentHref(lesson: RecordMap) {
 
 function names(items: RecordMap[] = []) {
   return items.map((item) => item?.fullName || item?.name).filter(Boolean).join(", ") || "-";
+}
+
+function subjectLabel(subject?: RecordMap | null) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function labelStatus(status: string) {

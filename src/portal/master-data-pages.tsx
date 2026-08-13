@@ -333,7 +333,7 @@ function formFields(entity: EntityName, record: RecordMap | null, lookups: Recor
         <PortalInput id="country" label="Country" defaultValue={record?.country ?? ""} />
         <PortalInput id="timeZone" label="Time zone" defaultValue={record?.timeZone ?? ""} />
         <PortalInput id="schoolOrInstitution" label="School or institution" defaultValue={record?.schoolOrInstitution ?? ""} />
-        <PortalSelect id="examPathway" label="Exam pathway" options={examPathways} defaultValue={record?.examPathway ?? ""} />
+        <PortalSelect id="examPathway" label="Exam pathway" options={examPathways} required defaultValue={record?.examPathway ?? ""} />
         <PortalSelect id="status" label="Status" options={statuses} defaultValue={record?.status ?? "ACTIVE"} />
         <PortalSelect id="directLoginDisabled" label="Disable direct student login" options={yesNoOptions} defaultValue={booleanSelect(record?.directLoginDisabled) || "No"} />
         <PortalInput id="startDate" label="Start date" type="date" defaultValue={dateInput(record?.startDate)} />
@@ -412,7 +412,7 @@ function formFields(entity: EntityName, record: RecordMap | null, lookups: Recor
       <PortalSelect id="subjectId" label="Subject" required defaultValue={record?.subjectId ?? ""}>
         <option value="">Select an option</option>
         {(lookups.subjects ?? []).map((subject: RecordMap) => (
-          <option key={subject.id} value={subject.id}>{subject.name}</option>
+          <option key={subject.id} value={subject.id}>{subjectLabel(subject)}</option>
         ))}
       </PortalSelect>
       <PortalInput id="startDate" label="Start date" type="date" required defaultValue={dateInput(record?.startDate)} />
@@ -438,7 +438,7 @@ function MultiSelect({ id, label, options, defaultValues = [] }: { id: string; l
       >
         {options.map((option) => (
           <option key={option.id} value={option.id}>
-            {option.name}
+            {optionLabel(option)}
           </option>
         ))}
       </select>
@@ -533,7 +533,7 @@ function rowFor(entity: EntityName, record: RecordMap): ReactNode[] {
   return [
     record.student?.fullName || "-",
     record.tutor?.fullName || "-",
-    record.subject?.name || "-",
+    subjectLabel(record.subject) || "-",
     `${dateText(record.startDate)}${record.endDate ? ` - ${dateText(record.endDate)}` : ""}`,
     <PortalBadge tone={statusTone(record.status)}>{record.status}</PortalBadge>,
     actions(entity, record.id),
@@ -567,10 +567,10 @@ function RelatedSummary({ entity, record }: { entity: EntityName; record: Record
     return relatedCard("Linked students", record.students);
   }
   if (entity === "students") {
-    return relatedCard("Assigned tutors", record.tutorAssignments?.map((assignment: RecordMap) => ({ id: assignment.id, name: `${assignment.tutor?.fullName} - ${assignment.subject?.name}`, status: assignment.status })));
+    return relatedCard("Assigned tutors", record.tutorAssignments?.map((assignment: RecordMap) => ({ id: assignment.id, name: `${assignment.tutor?.fullName} - ${subjectLabel(assignment.subject)}`, status: assignment.status })));
   }
   if (entity === "tutors") {
-    return relatedCard("Assigned students", record.studentAssignments?.map((assignment: RecordMap) => ({ id: assignment.id, name: `${assignment.student?.fullName} - ${assignment.subject?.name}`, status: assignment.status })));
+    return relatedCard("Assigned students", record.studentAssignments?.map((assignment: RecordMap) => ({ id: assignment.id, name: `${assignment.student?.fullName} - ${subjectLabel(assignment.subject)}`, status: assignment.status })));
   }
   if (entity === "subjects") {
     return relatedCard("Usage", [
@@ -582,7 +582,7 @@ function RelatedSummary({ entity, record }: { entity: EntityName; record: Record
   return relatedCard("Allocation details", [
     { id: "student", name: `Student: ${record.student?.fullName ?? "-"}` },
     { id: "tutor", name: `Tutor: ${record.tutor?.fullName ?? "-"}` },
-    { id: "subject", name: `Subject: ${record.subject?.name ?? "-"}` },
+    { id: "subject", name: `Subject: ${subjectLabel(record.subject) || "-"}` },
   ]);
 }
 
@@ -677,7 +677,7 @@ function detailItems(entity: EntityName, record: RecordMap): Array<[string, Reac
   return [
     ["Student", record.student?.fullName],
     ["Tutor", record.tutor?.fullName],
-    ["Subject", record.subject?.name],
+    ["Subject", subjectLabel(record.subject)],
     ["Start date", dateText(record.startDate)],
     ["End date", dateText(record.endDate)],
     ["Status", record.status],
@@ -695,13 +695,24 @@ function titleCell(title: ReactNode, subtitle?: ReactNode) {
 }
 
 function displayName(entity: EntityName, record: RecordMap) {
-  if (entity === "subjects") return record.name;
+  if (entity === "subjects") return subjectLabel(record);
   if (entity === "assignments") return `${record.student?.fullName ?? "Student"} / ${record.tutor?.fullName ?? "Tutor"}`;
   return record.fullName;
 }
 
 function names(items: RecordMap[] = []) {
-  return items.map((item) => item.name || item.fullName).filter(Boolean).join(", ") || "-";
+  return items.map(optionLabel).filter(Boolean).join(", ") || "-";
+}
+
+function optionLabel(item?: RecordMap | null) {
+  return subjectLabel(item) || item?.fullName || item?.name || "";
+}
+
+function subjectLabel(subject?: RecordMap | null) {
+  if (!subject?.name) {
+    return "";
+  }
+  return subject.examPathway ? `${subject.name} - ${subject.examPathway}` : subject.name;
 }
 
 function countryCell(record: RecordMap) {
