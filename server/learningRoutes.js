@@ -93,7 +93,7 @@ export function registerLearningRoutes(app, upload, { sendPortalEmail } = {}) {
         prisma.student.findMany({ where: await studentScopeWhere(prisma, request), orderBy: { fullName: "asc" }, select: { id: true, fullName: true, parentId: true, yearGroup: true, examPathway: true, status: true } }),
         prisma.tutor.findMany({ where: await tutorScopeWhere(prisma, request), orderBy: { fullName: "asc" }, select: { id: true, fullName: true, email: true, status: true } }),
         prisma.subject.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, examPathway: true, category: true } }),
-        prisma.lesson.findMany({ where: await lessonLookupWhere(prisma, request), orderBy: { scheduledStart: "desc" }, take: 100, select: { id: true, studentId: true, tutorId: true, subjectId: true, lessonType: true, scheduledStart: true } }),
+        prisma.lesson.findMany({ where: await lessonLookupWhere(prisma, request), orderBy: { scheduledStart: "desc" }, take: 100, select: { id: true, studentId: true, tutorId: true, subjectId: true, lessonType: true, scheduledStart: true, status: true } }),
         prisma.resource.findMany({ where: await resourceScopeWhere(prisma, request), include: resourceInclude, orderBy: { title: "asc" }, take: 200 }),
       ]);
 
@@ -168,6 +168,7 @@ export function registerLearningRoutes(app, upload, { sendPortalEmail } = {}) {
 
   app.post("/api/portal/homework/:id/publish", requireAnyPermission(homeworkManagePermissions), async (request, response, next) => {
     try {
+      assertTutorHomeworkActor(request, "Assignments must be published by tutors.");
       const prisma = getPrisma();
       const existing = await findHomeworkForRequest(prisma, request, request.params.id, true);
       const homework = await prisma.homework.update({
@@ -218,6 +219,7 @@ export function registerLearningRoutes(app, upload, { sendPortalEmail } = {}) {
 
   app.post("/api/portal/homework/:id/review", requireAnyPermission(homeworkManagePermissions), async (request, response, next) => {
     try {
+      assertTutorHomeworkActor(request, "Assignments must be graded by tutors.");
       const prisma = getPrisma();
       const existing = await findHomeworkForRequest(prisma, request, request.params.id, true);
       const status = parseOption(request.body?.status, reviewStatuses, "Select a valid review status.");
@@ -386,10 +388,12 @@ export function registerLearningRoutes(app, upload, { sendPortalEmail } = {}) {
 }
 
 async function createHomework({ prisma, request, sendPortalEmail }) {
+  assertTutorHomeworkActor(request, "Assignments must be set by tutors after completed lessons.");
   const body = request.body ?? {};
   const tutorId = await resolveTutorForHomework(prisma, request, body.tutorId);
   const studentId = required(body.studentId, "Student is required.");
-  await assertStudentInHomeworkScope(prisma, request, studentId, tutorId);
+  const lessonId = optional(body.lessonId);
+  await assertStudentInHomeworkScope(prisma, request, { studentId, tutorId, lessonId });
   const resourceIds = parseIdArray(body.resourceIds);
   const resourceConnect = resourceIds.length ? { connect: resourceIds.map((id) => ({ id })) } : undefined;
   const stored = request.file ? await storeLearningUpload(request.file, "homework-attachments") : null;
@@ -399,7 +403,7 @@ async function createHomework({ prisma, request, sendPortalEmail }) {
     data: cleanData({
       studentId,
       tutorId,
-      lessonId: optional(body.lessonId),
+      lessonId,
       subjectId: optional(body.subjectId),
       title: required(body.title, "Homework title is required."),
       details: required(body.details || body.instructions, "Homework instructions are required."),
@@ -419,6 +423,12 @@ async function createHomework({ prisma, request, sendPortalEmail }) {
     await notifyHomeworkAssigned({ prisma, request, homework, sendPortalEmail });
   }
   return homework;
+}
+
+function assertTutorHomeworkActor(request, message) {
+  if (request.portalUser?.role?.name !== "Tutor") {
+    throw new ForbiddenError(message);
+  }
 }
 
 async function notifyHomeworkAssigned({ prisma, request, homework, sendPortalEmail }) {
@@ -636,7 +646,7 @@ async function studentScopeWhere(prisma, request) {
   }
   if (hasPermission(request.portalUser, "own:homework") || hasPermission(request.portalUser, "own:progress")) {
     const tutor = await prisma.tutor.findUnique({ where: { userId: request.portalUser.id }, select: { id: true } });
-    if (tutor) return { status: "ACTIVE", tutorAssignments: { some: { tutorId: tutor.id, status: "ACTIVE" } } };
+    if (tutor) return { status: "ACTIVE", OR: [{ lessons: { some: { OR: [{ tutorId: tutor.id }, { replacementTutorId: tutor.id }] } } }, { groupLessons: { some: { OR: [{ tutorId: tutor.id }, { replacementTutorId: tutor.id }] } } }] };
     const student = await prisma.student.findUnique({ where: { userId: request.portalUser.id }, select: { id: true } });
     if (student) return { id: student.id };
   }
@@ -660,7 +670,7 @@ async function lessonLookupWhere(prisma, request) {
     return {};
   }
   const tutor = await prisma.tutor.findUnique({ where: { userId: request.portalUser.id }, select: { id: true } });
-  if (tutor) return { OR: [{ tutorId: tutor.id }, { replacementTutorId: tutor.id }] };
+  if (tutor) return { status: "COMPLETED", OR: [{ tutorId: tutor.id }, { replacementTutorId: tutor.id }] };
   const student = await prisma.student.findUnique({ where: { userId: request.portalUser.id }, select: { id: true } });
   if (student) return { OR: [{ studentId: student.id }, { students: { some: { id: student.id } } }] };
   const parent = await prisma.parent.findUnique({ where: { userId: request.portalUser.id }, select: { id: true } });
@@ -681,17 +691,30 @@ async function resolveTutorForHomework(prisma, request, requestedTutorId) {
   return tutor.id;
 }
 
-async function assertStudentInHomeworkScope(prisma, request, studentId, tutorId) {
+async function assertStudentInHomeworkScope(prisma, request, { studentId, tutorId, lessonId }) {
   if (hasPermission(request.portalUser, "homework:manage")) {
     return;
   }
   if (!tutorId) {
     throw new ForbiddenError("Tutor profile is required.");
   }
-  const assignment = await prisma.studentTutorAssignment.findFirst({ where: { studentId, tutorId, status: "ACTIVE" }, select: { id: true } });
-  const lesson = await prisma.lesson.findFirst({ where: { studentId, OR: [{ tutorId }, { replacementTutorId: tutorId }] }, select: { id: true } });
-  if (!assignment && !lesson) {
-    throw new ForbiddenError("Tutors can only create homework for assigned students.");
+  if (!lessonId) {
+    throw new ValidationError("Link a completed lesson before setting an assignment.");
+  }
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: lessonId,
+      status: "COMPLETED",
+      OR: [
+        { studentId },
+        { students: { some: { id: studentId } } },
+      ],
+      AND: [{ OR: [{ tutorId }, { replacementTutorId: tutorId }] }],
+    },
+    select: { id: true, subjectId: true },
+  });
+  if (!lesson) {
+    throw new ForbiddenError("Tutors can only set assignments after completed lessons they taught.");
   }
 }
 

@@ -77,13 +77,13 @@ const portalModules: PortalModule[] = [
   { id: "parents", label: "Parents", href: "/portal/parents", icon: Users, description: "Parent and guardian records.", permission: "parents:manage" },
   { id: "tutors", label: "Tutors", href: "/portal/tutors", icon: UserRoundCog, description: "Tutor profiles, verification, and readiness.", permission: "tutors:manage" },
   { id: "subjects", label: "Subjects", href: "/portal/subjects", icon: BookMarked, description: "Subject catalogue, categories, and exam pathways.", permission: "subjects:manage" },
-  { id: "assignments", label: "Tutor Allocation", href: "/portal/assignments", icon: Users, description: "Admin tutor-to-pupil allocations by subject with active-date tracking.", permission: "assignments:manage" },
+  { id: "assignments", label: "Assignments", href: "/portal/assignments", icon: BookMarked, description: "Admin monitoring for tutor-set pupil assignments, submissions, and grading.", permission: "homework:manage" },
   { id: "lessons", label: "Lessons", href: "/portal/lessons", icon: BookMarked, description: "Lesson records and delivery tracking.", permission: ["lessons:manage", "own:lessons"] },
   { id: "timetable", label: "Timetable", href: "/portal/timetable", icon: CalendarDays, description: "Scheduling and calendar planning.", permission: ["timetable:manage", "own:timetable", "family:timetable"] },
   { id: "lessonReports", label: "Lesson Reports", href: "/portal/lesson-reports", icon: FileText, description: "Daily lesson reporting and continuity notes.", permission: ["reports:manage", "own:lesson-reports", "family:lesson-updates"] },
   { id: "timesheets", label: "Timesheets", href: "/portal/timesheets", icon: Clock3, description: "Monthly tutor session breakdowns.", permission: ["timesheets:manage", "finance:manage", "own:timesheets", "own:payments"] },
   { id: "finance", label: "Finance", href: "/portal/finance", icon: WalletCards, description: "Student invoices, parent payments, receipts, and billing reports.", permission: ["finance:manage", "family:finance"] },
-  { id: "homework", label: "Homework & Assignments", href: "/portal/homework", icon: BookMarked, description: "Tutor-set assignments, submissions, feedback, and completion status.", permission: ["homework:manage", "own:homework", "family:homework"] },
+  { id: "homework", label: "Homework & Assignments", href: "/portal/homework", icon: BookMarked, description: "Tutor-set assignments, pupil submissions, feedback, and completion status.", permission: ["homework:manage", "own:homework", "family:homework"] },
   { id: "resources", label: "Resources", href: "/portal/resources", icon: FolderOpen, description: "Permission-controlled learning materials and approved links.", permission: ["resources:manage", "resources:approved"] },
   { id: "progress", label: "Progress", href: "/portal/progress", icon: TrendingUp, description: "Learning goals, progress summaries, and approved parent updates.", permission: ["progress:manage", "own:progress", "family:progress"] },
   { id: "notifications", label: "Notifications", href: "/portal/notifications", icon: Bell, description: "Portal alerts and message centre.", permission: ["notifications:manage", "own:notifications"] },
@@ -220,8 +220,12 @@ function PortalRouteContent({ currentPath, activeModule, currentUser }: { curren
     return <UsersPage />;
   }
 
-  if (activeModule.id === "parents" || activeModule.id === "students" || activeModule.id === "tutors" || activeModule.id === "subjects" || activeModule.id === "assignments") {
+  if (activeModule.id === "parents" || activeModule.id === "students" || activeModule.id === "tutors" || activeModule.id === "subjects") {
     return <MasterDataRoute entity={activeModule.id} routePath={currentPath} />;
+  }
+
+  if (activeModule.id === "assignments") {
+    return <HomeworkRoute currentUser={currentUser} mode="admin-monitor" />;
   }
 
   if (activeModule.id === "lessons" || activeModule.id === "timetable") {
@@ -241,7 +245,7 @@ function PortalRouteContent({ currentPath, activeModule, currentUser }: { curren
   }
 
   if (activeModule.id === "homework") {
-    return <HomeworkRoute currentUser={currentUser} />;
+    return <HomeworkRoute currentUser={currentUser} mode="workspace" />;
   }
 
   if (activeModule.id === "resources") {
@@ -672,14 +676,16 @@ function PortalSidebar({ activeModule, user, onNavigate }: { activeModule: Porta
 }
 
 function visiblePortalModules(user: PortalUser) {
-  if (!hideRestrictedModules(user)) {
-    return portalModules;
-  }
-  return portalModules.filter((module) => canAccessModule(user, module));
+  const modules = hideRestrictedModules(user) ? portalModules.filter((module) => canAccessModule(user, module)) : portalModules;
+  return hideStaffHomeworkWorkspace(user) ? modules.filter((module) => module.id !== "homework") : modules;
 }
 
 function hideRestrictedModules(user: PortalUser) {
   return ["Tutor", "Parent", "Student"].includes(user.role?.name ?? "");
+}
+
+function hideStaffHomeworkWorkspace(user: PortalUser) {
+  return hasPortalPermission(user, "homework:manage") && !["Tutor", "Parent", "Student"].includes(user.role?.name ?? "");
 }
 
 function PortalDashboard({ currentPath, currentUser }: { currentPath: string; currentUser: PortalUser }) {
@@ -687,7 +693,7 @@ function PortalDashboard({ currentPath, currentUser }: { currentPath: string; cu
     return <FamilyDashboardRoute routePath={currentPath} currentUser={currentUser} />;
   }
 
-  const rows = portalModules.map((module) => [
+  const rows = visiblePortalModules(currentUser).map((module) => [
     <span className="font-black text-navy">{module.label}</span>,
     module.description,
     portalFeatureFlags[module.id] ? <PortalBadge tone="success">Enabled</PortalBadge> : <PortalBadge tone="warning">Coming Later</PortalBadge>,

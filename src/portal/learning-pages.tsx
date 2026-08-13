@@ -16,6 +16,7 @@ import {
 
 type LoadState = "idle" | "loading" | "success" | "error";
 type RecordMap = Record<string, any>;
+type HomeworkRouteMode = "workspace" | "admin-monitor";
 
 type LearningLookups = {
   students?: RecordMap[];
@@ -31,8 +32,10 @@ type LearningLookups = {
   goalStatuses?: string[];
 };
 
-export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
-  const canManage = hasPortalPermission(currentUser, "homework:manage") || currentUser.role?.name === "Tutor";
+export function HomeworkRoute({ currentUser, mode = "workspace" }: { currentUser: PortalUser; mode?: HomeworkRouteMode }) {
+  const isAdminMonitor = mode === "admin-monitor";
+  const canCreate = !isAdminMonitor && currentUser.role?.name === "Tutor";
+  const canReview = !isAdminMonitor && currentUser.role?.name === "Tutor";
   const canSubmit = currentUser.role?.name === "Student" && hasPortalPermission(currentUser, "own:homework");
   const [status, setStatus] = useState<LoadState>("loading");
   const [submitStatus, setSubmitStatus] = useState<LoadState>("idle");
@@ -131,8 +134,8 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
   return (
     <div className="grid gap-6">
       <PortalCard
-        title="Homework & Assignments"
-        eyebrow="Learning Workflow"
+        title={isAdminMonitor ? "Assignments" : "Homework & Assignments"}
+        eyebrow={isAdminMonitor ? "Admin Monitoring" : "Learning Workflow"}
         action={
           <PortalButton type="button" variant="ghost" onClick={loadHomework}>
             <RefreshCcw className="h-4 w-4" aria-hidden="true" />
@@ -140,9 +143,12 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
           </PortalButton>
         }
       >
-        <PortalAlert title="Tutor-set assignment workflow is active" tone="success">
-          Tutors can set work at the end of a lesson, upload resources for pupils, pupils can download and submit answers, and admins can monitor the full process.
+        <PortalAlert title={isAdminMonitor ? "Assignment monitoring is active" : "Tutor-set assignment workflow is active"} tone="success">
+          {isAdminMonitor
+            ? "Admins can monitor whether tutors are setting assignments after completed lessons, how pupils submit, and whether tutor grading or feedback has been completed."
+            : "Tutors can set work after completed lessons, upload resources for pupils, pupils can download and submit answers, and admins can monitor the full process."}
         </PortalAlert>
+        {isAdminMonitor && <AssignmentMonitorSummary homework={homework} />}
         <div className="mt-5 max-w-xs">
           <PortalSelect id="homeworkStatusFilter" label="Filter by status" value={filter} onChange={(event) => setFilter(event.target.value)}>
             <option value="">All statuses</option>
@@ -157,22 +163,23 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
 
       {message && <PortalAlert title={submitStatus === "error" ? "Assignment action failed" : "Assignment action saved"} tone={submitStatus === "error" ? "error" : "success"}>{message}</PortalAlert>}
 
-      {canManage && (
+      {canCreate && (
         <PortalCard title="Set Homework / Assignment" eyebrow="Tutor Action">
           <HomeworkCreateForm lookups={lookups} disabled={submitStatus === "loading"} onSubmit={submitHomeworkForm} currentUser={currentUser} initialValues={initialHomeworkValues} />
         </PortalCard>
       )}
 
-      <PortalCard title="Homework & Assignment Records" eyebrow={`${homework.length} item${homework.length === 1 ? "" : "s"}`}>
+      <PortalCard title={isAdminMonitor ? "Assignment Monitoring" : "Homework & Assignment Records"} eyebrow={`${homework.length} item${homework.length === 1 ? "" : "s"}`}>
         {homework.length === 0 ? (
-          <PortalEmptyState title="No homework or assignments found" message="Tutor-set pupil work will appear here once it is created or assigned." />
+          <PortalEmptyState title="No homework or assignments found" message={isAdminMonitor ? "Tutor-set pupil assignments will appear here for admin monitoring." : "Tutor-set pupil work will appear here once it is created or assigned."} />
         ) : (
           <div className="grid gap-4">
             {homework.map((item) => (
               <HomeworkCard
                 key={item.id}
                 item={item}
-                canManage={canManage}
+                canPublish={canCreate}
+                canReview={canReview}
                 canSubmit={canSubmit}
                 loading={submitStatus === "loading"}
                 onPublish={() => publishHomework(item.id)}
@@ -200,7 +207,7 @@ function HomeworkCreateForm({
   currentUser: PortalUser;
   initialValues: RecordMap;
 }) {
-  const isAdmin = hasPortalPermission(currentUser, "homework:manage");
+  const showTutorPicker = hasPortalPermission(currentUser, "homework:manage") && currentUser.role?.name !== "Tutor";
   return (
     <form className="grid gap-5 md:grid-cols-2" onSubmit={(event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -214,7 +221,7 @@ function HomeworkCreateForm({
           </option>
         ))}
       </PortalSelect>
-      {isAdmin && (
+      {showTutorPicker && (
         <PortalSelect id="tutorId" label="Tutor" defaultValue={initialValues.tutorId ?? ""}>
           <option value="">Select tutor</option>
           {(lookups.tutors ?? []).map((tutor) => (
@@ -232,8 +239,8 @@ function HomeworkCreateForm({
           </option>
         ))}
       </PortalSelect>
-      <PortalSelect id="lessonId" label="Linked lesson" defaultValue={initialValues.lessonId ?? ""}>
-        <option value="">No linked lesson</option>
+      <PortalSelect id="lessonId" label="Completed lesson" required defaultValue={initialValues.lessonId ?? ""}>
+        <option value="">Select completed lesson</option>
         {(lookups.lessons ?? []).map((lesson) => (
           <option key={lesson.id} value={lesson.id}>
             {dateText(lesson.scheduledStart)} - {lesson.lessonType}
@@ -276,9 +283,40 @@ function HomeworkCreateForm({
   );
 }
 
+function AssignmentMonitorSummary({ homework }: { homework: RecordMap[] }) {
+  const submitted = homework.filter((item) => ["SUBMITTED", "LATE", "REVIEWED", "RESUBMISSION_REQUIRED", "COMPLETED"].includes(item.status)).length;
+  const graded = homework.filter((item) => ["REVIEWED", "RESUBMISSION_REQUIRED", "COMPLETED"].includes(item.status)).length;
+  const open = homework.filter((item) => ["ASSIGNED", "LATE", "RESUBMISSION_REQUIRED"].includes(item.status)).length;
+  const missingLessonLink = homework.filter((item) => !item.lesson).length;
+
+  return (
+    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AssignmentMetric label="Total assignments" value={homework.length} />
+      <AssignmentMetric label="Open with pupils" value={open} />
+      <AssignmentMetric label="Submitted by pupils" value={submitted} />
+      <AssignmentMetric label="Graded by tutors" value={graded} />
+      {missingLessonLink > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 sm:col-span-2 xl:col-span-4">
+          <p className="text-sm font-black text-amber-800">{missingLessonLink} assignment{missingLessonLink === 1 ? "" : "s"} not linked to a lesson.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssignmentMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-4">
+      <p className="text-xs font-black uppercase text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-navy">{value}</p>
+    </div>
+  );
+}
+
 function HomeworkCard({
   item,
-  canManage,
+  canPublish,
+  canReview,
   canSubmit,
   loading,
   onPublish,
@@ -286,7 +324,8 @@ function HomeworkCard({
   onReview,
 }: {
   item: RecordMap;
-  canManage: boolean;
+  canPublish: boolean;
+  canReview: boolean;
   canSubmit: boolean;
   loading: boolean;
   onPublish: () => void;
@@ -307,8 +346,9 @@ function HomeworkCard({
         </div>
         <PortalBadge tone={homeworkTone(item.status)}>{statusLabel(item.status)}</PortalBadge>
       </div>
-      <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+      <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
         <Detail label="Tutor" value={item.tutor?.fullName || "Not assigned"} />
+        <Detail label="Linked lesson" value={item.lesson ? `${dateText(item.lesson.scheduledStart)} - ${item.lesson.lessonType}` : "-"} />
         <Detail label="Due date" value={dateText(item.dueDate)} />
         <Detail label="Marks" value={item.maxMarks ? `${item.mark ?? "-"} / ${item.maxMarks}` : item.mark ?? "-"} />
       </div>
@@ -327,7 +367,7 @@ function HomeworkCard({
           )}
         </div>
       )}
-      {canManage && isDraft && (
+      {canPublish && isDraft && (
         <div className="mt-4">
           <PortalButton type="button" disabled={loading} onClick={onPublish}>
             <Send className="h-4 w-4" aria-hidden="true" />
@@ -351,7 +391,7 @@ function HomeworkCard({
           </PortalButton>
         </form>
       )}
-      {canManage && ["SUBMITTED", "LATE", "REVIEWED", "RESUBMISSION_REQUIRED"].includes(item.status) && (
+      {canReview && ["SUBMITTED", "LATE", "REVIEWED", "RESUBMISSION_REQUIRED"].includes(item.status) && (
         <form className="mt-4 grid gap-3 rounded-md border border-slate-200 bg-white p-4 md:grid-cols-3" onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
           onReview(event.currentTarget);

@@ -44,19 +44,31 @@ test("homework and family permissions are split by role", () => {
   assert.equal(hasRolePermission("Parent", "homework:manage"), false);
 });
 
-test("portal separates tutor allocation from pupil homework assignments", () => {
+test("portal treats scheduled lessons as the tutor assignment source", () => {
   const shell = readFileSync(repoFile("src/portal/PortalApp.tsx"), "utf8");
   const homeworkPage = readFileSync(repoFile("src/portal/learning-pages.tsx"), "utf8");
   const lessonWorkspace = readFileSync(repoFile("src/portal/lesson-workspace-pages.tsx"), "utf8");
   const learningRoutes = readFileSync(repoFile("server/learningRoutes.js"), "utf8");
 
-  assert.match(shell, /label: "Tutor Allocation"/);
+  assert.doesNotMatch(shell, /label: "Tutor Allocation"/);
+  assert.match(shell, /label: "Assignments"/);
+  assert.match(shell, /mode="admin-monitor"/);
+  assert.match(shell, /hideStaffHomeworkWorkspace/);
   assert.match(shell, /label: "Homework & Assignments"/);
   assert.match(homeworkPage, /Tutor-set assignment workflow is active/);
+  assert.match(homeworkPage, /Admin Monitoring/);
+  assert.match(homeworkPage, /AssignmentMonitorSummary/);
+  assert.match(homeworkPage, /const canCreate = !isAdminMonitor && currentUser\.role\?\.name === "Tutor"/);
+  assert.match(homeworkPage, /label="Completed lesson" required/);
   assert.match(homeworkPage, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(homeworkPage, /defaultValue=\{initialValues\.studentId \?\? ""\}/);
   assert.match(lessonWorkspace, /Set Assignment/);
   assert.match(lessonWorkspace, /assignmentHref\(lesson\)/);
+  assert.match(lessonWorkspace, /const canSetAssignments = currentUser\.role\?\.name === "Tutor"/);
+  assert.match(lessonWorkspace, /lesson\.status === "COMPLETED"/);
+  assert.match(learningRoutes, /assertTutorHomeworkActor\(request, "Assignments must be set by tutors after completed lessons\."\)/);
+  assert.match(learningRoutes, /Link a completed lesson before setting an assignment/);
+  assert.match(learningRoutes, /Tutors can only set assignments after completed lessons they taught/);
   assert.match(learningRoutes, /upload\.single\("attachment"\)/);
   assert.match(learningRoutes, /upload\.single\("submissionFile"\)/);
 });
