@@ -44,6 +44,23 @@ test("homework and family permissions are split by role", () => {
   assert.equal(hasRolePermission("Parent", "homework:manage"), false);
 });
 
+test("portal separates tutor allocation from pupil homework assignments", () => {
+  const shell = readFileSync(repoFile("src/portal/PortalApp.tsx"), "utf8");
+  const homeworkPage = readFileSync(repoFile("src/portal/learning-pages.tsx"), "utf8");
+  const lessonWorkspace = readFileSync(repoFile("src/portal/lesson-workspace-pages.tsx"), "utf8");
+  const learningRoutes = readFileSync(repoFile("server/learningRoutes.js"), "utf8");
+
+  assert.match(shell, /label: "Tutor Allocation"/);
+  assert.match(shell, /label: "Homework & Assignments"/);
+  assert.match(homeworkPage, /Tutor-set assignment workflow is active/);
+  assert.match(homeworkPage, /new URLSearchParams\(window\.location\.search\)/);
+  assert.match(homeworkPage, /defaultValue=\{initialValues\.studentId \?\? ""\}/);
+  assert.match(lessonWorkspace, /Set Assignment/);
+  assert.match(lessonWorkspace, /assignmentHref\(lesson\)/);
+  assert.match(learningRoutes, /upload\.single\("attachment"\)/);
+  assert.match(learningRoutes, /upload\.single\("submissionFile"\)/);
+});
+
 test("phase 10 report helpers calculate percentages and exports safely", () => {
   assert.equal(percentage(3, 4), 75);
   assert.equal(percentage(1, 3), 33.33);

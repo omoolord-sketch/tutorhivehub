@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { ExternalLink, FileText, Printer, RefreshCcw } from "lucide-react";
+import { BookOpenCheck, ExternalLink, FileText, Printer, RefreshCcw } from "lucide-react";
 import { hasPortalPermission, portalApi, type PortalUser } from "./api";
 import {
   PortalAlert,
@@ -31,6 +31,7 @@ const engagementOptions = ["Highly Engaged", "Participated Well", "Needed Encour
 
 export function LessonWorkspaceDashboard({ currentUser }: { currentUser: PortalUser }) {
   const canUseWorkspace = ["lessons:manage", "reports:manage", "own:lessons", "own:lesson-reports"].some((permission) => hasPortalPermission(currentUser, permission));
+  const canSetAssignments = hasPortalPermission(currentUser, "homework:manage") || currentUser.role?.name === "Tutor";
   const [upcomingLessons, setUpcomingLessons] = useState<RecordMap[]>([]);
   const [outstandingReports, setOutstandingReports] = useState<RecordMap[]>([]);
   const [status, setStatus] = useState<LoadState>("idle");
@@ -62,18 +63,18 @@ export function LessonWorkspaceDashboard({ currentUser }: { currentUser: PortalU
       {status === "error" && <div className="mt-5"><PortalAlert title="Could not load lesson workspace" tone="warning">The workspace will appear after the portal API is available.</PortalAlert></div>}
       {status === "success" && (
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          <LessonCardList title="Scheduled Lessons" lessons={upcomingLessons} empty="No upcoming lessons found." />
-          <LessonCardList title="Report Outstanding" lessons={outstandingReports} empty="No outstanding reports found." reportMode />
+          <LessonCardList title="Scheduled Lessons" lessons={upcomingLessons} empty="No upcoming lessons found." canSetAssignments={canSetAssignments} />
+          <LessonCardList title="Report Outstanding" lessons={outstandingReports} empty="No outstanding reports found." reportMode canSetAssignments={canSetAssignments} />
         </div>
       )}
     </PortalCard>
   );
 }
 
-export function LessonReportsRoute({ routePath }: { routePath: string; currentUser: PortalUser }) {
+export function LessonReportsRoute({ routePath, currentUser }: { routePath: string; currentUser: PortalUser }) {
   const lessonMatch = routePath.match(/^\/portal\/lesson-reports\/lesson\/([^/]+)$/);
   if (lessonMatch) {
-    return <LessonWorkspacePage lessonId={lessonMatch[1]} />;
+    return <LessonWorkspacePage lessonId={lessonMatch[1]} currentUser={currentUser} />;
   }
 
   const reportMatch = routePath.match(/^\/portal\/lesson-reports\/([^/]+)$/);
@@ -84,7 +85,7 @@ export function LessonReportsRoute({ routePath }: { routePath: string; currentUs
   return <ReportsOverview />;
 }
 
-function LessonCardList({ title, lessons, empty, reportMode = false }: { title: string; lessons: RecordMap[]; empty: string; reportMode?: boolean }) {
+function LessonCardList({ title, lessons, empty, reportMode = false, canSetAssignments = false }: { title: string; lessons: RecordMap[]; empty: string; reportMode?: boolean; canSetAssignments?: boolean }) {
   return (
     <section>
       <h3 className="text-lg font-black text-navy">{title}</h3>
@@ -93,7 +94,7 @@ function LessonCardList({ title, lessons, empty, reportMode = false }: { title: 
       ) : (
         <div className="mt-4 grid gap-4">
           {lessons.map((lesson) => (
-            <LessonSummaryCard key={lesson.id} lesson={lesson} reportMode={reportMode} />
+            <LessonSummaryCard key={lesson.id} lesson={lesson} reportMode={reportMode} canSetAssignments={canSetAssignments} />
           ))}
         </div>
       )}
@@ -101,7 +102,7 @@ function LessonCardList({ title, lessons, empty, reportMode = false }: { title: 
   );
 }
 
-function LessonSummaryCard({ lesson, reportMode = false }: { lesson: RecordMap; reportMode?: boolean }) {
+function LessonSummaryCard({ lesson, reportMode = false, canSetAssignments = false }: { lesson: RecordMap; reportMode?: boolean; canSetAssignments?: boolean }) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -131,16 +132,23 @@ function LessonSummaryCard({ lesson, reportMode = false }: { lesson: RecordMap; 
         <a href={`/portal/lesson-reports/lesson/${lesson.id}`} className="inline-flex items-center justify-center rounded-md bg-gold px-3 py-2 text-xs font-black text-navy transition hover:bg-gold-100">
           Complete Lesson Report
         </a>
+        {canSetAssignments && (
+          <a href={assignmentHref(lesson)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-navy transition hover:border-gold hover:bg-gold-50">
+            <BookOpenCheck className="h-4 w-4" aria-hidden="true" />
+            Set Assignment
+          </a>
+        )}
       </div>
     </article>
   );
 }
 
-function LessonWorkspacePage({ lessonId }: { lessonId: string }) {
+function LessonWorkspacePage({ lessonId, currentUser }: { lessonId: string; currentUser: PortalUser }) {
   const [lesson, setLesson] = useState<RecordMap | null>(null);
   const [timeline, setTimeline] = useState<RecordMap[]>([]);
   const [status, setStatus] = useState<LoadState>("loading");
   const [message, setMessage] = useState("");
+  const canSetAssignments = hasPortalPermission(currentUser, "homework:manage") || currentUser.role?.name === "Tutor";
 
   async function loadLesson() {
     setStatus("loading");
@@ -189,7 +197,17 @@ function LessonWorkspacePage({ lessonId }: { lessonId: string }) {
       <PortalCard
         title={`${lesson.subject?.name ?? "Lesson"} Workspace`}
         eyebrow="Lesson Delivery"
-        action={<a href="/portal/lesson-reports" className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-black text-navy shadow-sm transition hover:border-gold hover:bg-gold-50">Back to Reports</a>}
+        action={
+          <div className="flex flex-wrap gap-2">
+            {canSetAssignments && (
+              <a href={assignmentHref(lesson)} className="inline-flex items-center justify-center gap-2 rounded-md bg-gold px-4 py-3 text-sm font-black text-navy shadow-sm transition hover:bg-gold-100">
+                <BookOpenCheck className="h-4 w-4" aria-hidden="true" />
+                Set Assignment
+              </a>
+            )}
+            <a href="/portal/lesson-reports" className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-black text-navy shadow-sm transition hover:border-gold hover:bg-gold-50">Back to Reports</a>
+          </div>
+        }
       >
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
           <DetailGrid
@@ -541,6 +559,18 @@ function exportReport(text: string, report: RecordMap) {
 function homeworkSummary(items: RecordMap[] = []) {
   if (!items.length) return "-";
   return items.map((item) => `${item.title}${item.dueDate ? ` due ${dateText(item.dueDate)}` : ""}`).join("; ");
+}
+
+function assignmentHref(lesson: RecordMap) {
+  const query = new URLSearchParams();
+  const studentId = lesson.studentId || lesson.student?.id || lesson.students?.[0]?.id;
+  const tutorId = lesson.replacementTutorId || lesson.replacementTutor?.id || lesson.tutorId || lesson.tutor?.id;
+  const subjectId = lesson.subjectId || lesson.subject?.id;
+  if (studentId) query.set("studentId", studentId);
+  if (tutorId) query.set("tutorId", tutorId);
+  if (subjectId) query.set("subjectId", subjectId);
+  if (lesson.id) query.set("lessonId", lesson.id);
+  return `/portal/homework${query.size ? `?${query.toString()}` : ""}`;
 }
 
 function names(items: RecordMap[] = []) {

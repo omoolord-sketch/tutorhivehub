@@ -40,6 +40,15 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
   const [lookups, setLookups] = useState<LearningLookups>({});
   const [homework, setHomework] = useState<RecordMap[]>([]);
   const [filter, setFilter] = useState("");
+  const initialHomeworkValues = useMemo(() => {
+    const query = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
+    return {
+      studentId: query.get("studentId") ?? "",
+      tutorId: query.get("tutorId") ?? "",
+      subjectId: query.get("subjectId") ?? "",
+      lessonId: query.get("lessonId") ?? "",
+    };
+  }, []);
 
   async function loadHomework() {
     setStatus("loading");
@@ -55,7 +64,7 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
       setStatus("success");
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Could not load homework.");
+      setMessage(error instanceof Error ? error.message : "Could not load homework and assignments.");
     }
   }
 
@@ -70,16 +79,16 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
       await portalApi<RecordMap>("/api/portal/homework", { method: "POST", body: new FormData(form) });
       form.reset();
       setSubmitStatus("success");
-      setMessage("Homework saved successfully.");
+      setMessage("Assignment saved successfully.");
       await loadHomework();
     } catch (error) {
       setSubmitStatus("error");
-      setMessage(error instanceof Error ? error.message : "Could not save homework.");
+      setMessage(error instanceof Error ? error.message : "Could not save assignment.");
     }
   }
 
   async function publishHomework(homeworkId: string) {
-    await runAction(`/api/portal/homework/${homeworkId}/publish`, "Homework published successfully.");
+    await runAction(`/api/portal/homework/${homeworkId}/publish`, "Assignment published successfully.");
   }
 
   async function submitStudentWork(homeworkId: string, form: HTMLFormElement) {
@@ -89,16 +98,16 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
       await portalApi<RecordMap>(`/api/portal/homework/${homeworkId}/submit`, { method: "POST", body: new FormData(form) });
       form.reset();
       setSubmitStatus("success");
-      setMessage("Homework submitted successfully.");
+      setMessage("Assignment submitted successfully.");
       await loadHomework();
     } catch (error) {
       setSubmitStatus("error");
-      setMessage(error instanceof Error ? error.message : "Could not submit homework.");
+      setMessage(error instanceof Error ? error.message : "Could not submit assignment.");
     }
   }
 
   async function reviewHomework(homeworkId: string, form: HTMLFormElement) {
-    await runAction(`/api/portal/homework/${homeworkId}/review`, "Homework feedback saved successfully.", formPayload(form));
+    await runAction(`/api/portal/homework/${homeworkId}/review`, "Assignment feedback saved successfully.", formPayload(form));
     form.reset();
   }
 
@@ -112,17 +121,17 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
       await loadHomework();
     } catch (error) {
       setSubmitStatus("error");
-      setMessage(error instanceof Error ? error.message : "Could not update homework.");
+      setMessage(error instanceof Error ? error.message : "Could not update assignment.");
     }
   }
 
   if (status === "loading") return <PortalLoadingSkeleton rows={8} />;
-  if (status === "error") return <PortalAlert title="Could not load homework" tone="error">{message}</PortalAlert>;
+  if (status === "error") return <PortalAlert title="Could not load homework and assignments" tone="error">{message}</PortalAlert>;
 
   return (
     <div className="grid gap-6">
       <PortalCard
-        title="Homework"
+        title="Homework & Assignments"
         eyebrow="Learning Workflow"
         action={
           <PortalButton type="button" variant="ghost" onClick={loadHomework}>
@@ -131,8 +140,8 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
           </PortalButton>
         }
       >
-        <PortalAlert title="Homework workflow is active" tone="success">
-          Tutors can assign work, students can submit answers, and reviewed feedback is kept with the student's learning record.
+        <PortalAlert title="Tutor-set assignment workflow is active" tone="success">
+          Tutors can set work at the end of a lesson, upload resources for pupils, pupils can download and submit answers, and admins can monitor the full process.
         </PortalAlert>
         <div className="mt-5 max-w-xs">
           <PortalSelect id="homeworkStatusFilter" label="Filter by status" value={filter} onChange={(event) => setFilter(event.target.value)}>
@@ -146,17 +155,17 @@ export function HomeworkRoute({ currentUser }: { currentUser: PortalUser }) {
         </div>
       </PortalCard>
 
-      {message && <PortalAlert title={submitStatus === "error" ? "Homework action failed" : "Homework action saved"} tone={submitStatus === "error" ? "error" : "success"}>{message}</PortalAlert>}
+      {message && <PortalAlert title={submitStatus === "error" ? "Assignment action failed" : "Assignment action saved"} tone={submitStatus === "error" ? "error" : "success"}>{message}</PortalAlert>}
 
       {canManage && (
-        <PortalCard title="Create Homework" eyebrow="Tutor Action">
-          <HomeworkCreateForm lookups={lookups} disabled={submitStatus === "loading"} onSubmit={submitHomeworkForm} currentUser={currentUser} />
+        <PortalCard title="Set Homework / Assignment" eyebrow="Tutor Action">
+          <HomeworkCreateForm lookups={lookups} disabled={submitStatus === "loading"} onSubmit={submitHomeworkForm} currentUser={currentUser} initialValues={initialHomeworkValues} />
         </PortalCard>
       )}
 
-      <PortalCard title="Homework Records" eyebrow={`${homework.length} item${homework.length === 1 ? "" : "s"}`}>
+      <PortalCard title="Homework & Assignment Records" eyebrow={`${homework.length} item${homework.length === 1 ? "" : "s"}`}>
         {homework.length === 0 ? (
-          <PortalEmptyState title="No homework found" message="Homework tasks will appear here once they are created or assigned." />
+          <PortalEmptyState title="No homework or assignments found" message="Tutor-set pupil work will appear here once it is created or assigned." />
         ) : (
           <div className="grid gap-4">
             {homework.map((item) => (
@@ -183,11 +192,13 @@ function HomeworkCreateForm({
   disabled,
   onSubmit,
   currentUser,
+  initialValues,
 }: {
   lookups: LearningLookups;
   disabled: boolean;
   onSubmit: (form: HTMLFormElement) => void;
   currentUser: PortalUser;
+  initialValues: RecordMap;
 }) {
   const isAdmin = hasPortalPermission(currentUser, "homework:manage");
   return (
@@ -195,7 +206,7 @@ function HomeworkCreateForm({
       event.preventDefault();
       onSubmit(event.currentTarget);
     }}>
-      <PortalSelect id="studentId" label="Student" required>
+      <PortalSelect id="studentId" label="Student / Pupil" required defaultValue={initialValues.studentId ?? ""}>
         <option value="">Select student</option>
         {(lookups.students ?? []).map((student) => (
           <option key={student.id} value={student.id}>
@@ -204,7 +215,7 @@ function HomeworkCreateForm({
         ))}
       </PortalSelect>
       {isAdmin && (
-        <PortalSelect id="tutorId" label="Tutor">
+        <PortalSelect id="tutorId" label="Tutor" defaultValue={initialValues.tutorId ?? ""}>
           <option value="">Select tutor</option>
           {(lookups.tutors ?? []).map((tutor) => (
             <option key={tutor.id} value={tutor.id}>
@@ -213,7 +224,7 @@ function HomeworkCreateForm({
           ))}
         </PortalSelect>
       )}
-      <PortalSelect id="subjectId" label="Subject">
+      <PortalSelect id="subjectId" label="Subject" defaultValue={initialValues.subjectId ?? ""}>
         <option value="">Select subject</option>
         {(lookups.subjects ?? []).map((subject) => (
           <option key={subject.id} value={subject.id}>
@@ -221,7 +232,7 @@ function HomeworkCreateForm({
           </option>
         ))}
       </PortalSelect>
-      <PortalSelect id="lessonId" label="Linked lesson">
+      <PortalSelect id="lessonId" label="Linked lesson" defaultValue={initialValues.lessonId ?? ""}>
         <option value="">No linked lesson</option>
         {(lookups.lessons ?? []).map((lesson) => (
           <option key={lesson.id} value={lesson.id}>
@@ -229,7 +240,7 @@ function HomeworkCreateForm({
           </option>
         ))}
       </PortalSelect>
-      <PortalInput id="title" label="Homework title" required />
+      <PortalInput id="title" label="Homework / assignment title" required />
       <PortalInput id="dueDate" label="Due date" type="date" />
       <PortalTextarea id="instructions" label="Instructions" required className="md:col-span-2" />
       <PortalTextarea id="gradingCriteria" label="Marks or grading criteria" className="md:col-span-2" />
@@ -258,7 +269,7 @@ function HomeworkCreateForm({
       <div className="flex flex-wrap gap-3 md:col-span-2">
         <PortalButton type="submit" disabled={disabled}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          {disabled ? "Saving..." : "Save Homework"}
+          {disabled ? "Saving..." : "Save Assignment"}
         </PortalButton>
       </div>
     </form>
@@ -320,7 +331,7 @@ function HomeworkCard({
         <div className="mt-4">
           <PortalButton type="button" disabled={loading} onClick={onPublish}>
             <Send className="h-4 w-4" aria-hidden="true" />
-            Publish Homework
+            Publish Assignment
           </PortalButton>
         </div>
       )}
@@ -336,7 +347,7 @@ function HomeworkCard({
           <input id={`submissionFile-${item.id}`} name="submissionFile" type="file" className="rounded-md border border-slate-300 bg-white px-4 py-3 text-sm text-ink shadow-sm" />
           <PortalButton type="submit" disabled={loading}>
             <UploadCloud className="h-4 w-4" aria-hidden="true" />
-            Submit Homework
+            Submit Assignment
           </PortalButton>
         </form>
       )}

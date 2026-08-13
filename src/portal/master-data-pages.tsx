@@ -33,7 +33,7 @@ const entityConfig = {
   students: { endpoint: "/api/portal/students", singular: "Student", plural: "Students", listPermission: "students:manage" },
   tutors: { endpoint: "/api/portal/tutors", singular: "Tutor", plural: "Tutors", listPermission: "tutors:manage" },
   subjects: { endpoint: "/api/portal/subjects", singular: "Subject", plural: "Subjects", listPermission: "subjects:manage" },
-  assignments: { endpoint: "/api/portal/assignments", singular: "Tutor Assignment", plural: "Tutor Assignments", listPermission: "assignments:manage" },
+  assignments: { endpoint: "/api/portal/assignments", singular: "Tutor-Pupil Allocation", plural: "Tutor-Pupil Allocations", listPermission: "assignments:manage" },
 } as const;
 
 type EntityName = keyof typeof entityConfig;
@@ -266,7 +266,7 @@ function EntityForm({ entity, mode, recordId }: { entity: EntityName; mode: "cre
         {confirmDuplicate && (
           <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800 md:col-span-2">
             <input name="allowDuplicateActive" type="checkbox" defaultChecked className="mt-0.5 h-4 w-4 rounded border-amber-300 text-gold focus:ring-gold" />
-            <span>Confirm duplicate active assignment for the same student, tutor, and subject.</span>
+            <span>Confirm duplicate active allocation for the same student, tutor, and subject.</span>
           </label>
         )}
         <div className="md:col-span-2">
@@ -417,7 +417,7 @@ function formFields(entity: EntityName, record: RecordMap | null, lookups: Recor
       </PortalSelect>
       <PortalInput id="startDate" label="Start date" type="date" required defaultValue={dateInput(record?.startDate)} />
       <PortalInput id="endDate" label="End date" type="date" defaultValue={dateInput(record?.endDate)} />
-      <PortalSelect id="status" label="Assignment status" options={assignmentStatuses} defaultValue={record?.status ?? "ACTIVE"} />
+      <PortalSelect id="status" label="Allocation status" options={assignmentStatuses} defaultValue={record?.status ?? "ACTIVE"} />
       <PortalTextarea id="notes" label="Notes" className="md:col-span-2" defaultValue={record?.notes ?? ""} />
     </>
   );
@@ -576,10 +576,10 @@ function RelatedSummary({ entity, record }: { entity: EntityName; record: Record
     return relatedCard("Usage", [
       { id: "students", name: `${record._count?.students ?? 0} linked students` },
       { id: "tutors", name: `${record._count?.tutors ?? 0} linked tutors` },
-      { id: "assignments", name: `${record._count?.assignments ?? 0} assignments` },
+      { id: "assignments", name: `${record._count?.assignments ?? 0} allocations` },
     ]);
   }
-  return relatedCard("Assignment details", [
+  return relatedCard("Allocation details", [
     { id: "student", name: `Student: ${record.student?.fullName ?? "-"}` },
     { id: "tutor", name: `Tutor: ${record.tutor?.fullName ?? "-"}` },
     { id: "subject", name: `Subject: ${record.subject?.name ?? "-"}` },
